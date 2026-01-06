@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo, memo } from 'react';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';

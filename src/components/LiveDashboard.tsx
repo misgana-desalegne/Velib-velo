@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, memo } from 'react';
 import { Card } from './ui/card';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
@@ -50,6 +50,23 @@ const arrondissementSummary = [
   { arr: '6e', bikes: 489, docks: 311, utilization: 61 },
 ];
 
+// Memoized metric cards
+const MetricCard = memo(({ title, value, icon: Icon, badge, extra, iconColor }: any) => (
+  <Card className="p-6">
+    <div className="flex items-start justify-between mb-3">
+      <div>
+        <p className="text-sm text-gray-600">{title}</p>
+        <p className="text-3xl text-gray-900">{value}</p>
+      </div>
+      <Icon className={`w-8 h-8 ${iconColor}`} />
+    </div>
+    {badge && <Badge variant="secondary">{badge}</Badge>}
+    {extra}
+  </Card>
+));
+
+MetricCard.displayName = 'MetricCard';
+
 export function LiveDashboard() {
   const [liveData, setLiveData] = useState(generateLiveData());
   const [lastUpdate, setLastUpdate] = useState(new Date());
@@ -58,41 +75,43 @@ export function LiveDashboard() {
     const interval = setInterval(() => {
       setLiveData(generateLiveData());
       setLastUpdate(new Date());
-    }, 5000); // Update every 5 seconds to simulate live data
+    }, 5000);
 
     return () => clearInterval(interval);
   }, []);
 
-  const getStatusColor = (status: string) => {
+  const getStatusColor = useMemo(() => (status: string) => {
     switch (status) {
       case 'high': return 'bg-green-500';
       case 'medium': return 'bg-yellow-500';
       case 'low': return 'bg-red-500';
       default: return 'bg-gray-500';
     }
-  };
+  }, []);
 
   const refreshData = () => {
     setLiveData(generateLiveData());
     setLastUpdate(new Date());
   };
 
+  const formattedTime = useMemo(() => lastUpdate.toLocaleTimeString(), [lastUpdate]);
+
   return (
     <div className="p-8">
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h2 className="text-3xl text-gray-900 mb-2">Live Station Analysis</h2>
-          <p className="text-gray-600">Real-time monitoring of 1,500 bicycle stations across France</p>
+          <h2 className="text-3xl text-gray-900 mb-2">Analyse des Stations en Direct</h2>
+          <p className="text-gray-600">Surveillance en temps réel de 1 500 stations de vélos à travers la France</p>
         </div>
         <div className="flex items-center gap-4">
           <div className="text-right">
-            <p className="text-sm text-gray-600">Last Updated</p>
-            <p className="text-sm text-gray-900">{lastUpdate.toLocaleTimeString()}</p>
+            <p className="text-sm text-gray-600">Dernière mise à jour</p>
+            <p className="text-sm text-gray-900">{formattedTime}</p>
           </div>
           <Button onClick={refreshData} variant="outline">
             <RefreshCw className="w-4 h-4 mr-2" />
-            Refresh
+            Actualiser
           </Button>
         </div>
       </div>
@@ -107,13 +126,13 @@ export function LiveDashboard() {
             </div>
             <MapPin className="w-8 h-8 text-blue-600" />
           </div>
-          <Badge variant="secondary">Active</Badge>
+          <Badge variant="secondary">Actives</Badge>
         </Card>
 
         <Card className="p-6">
           <div className="flex items-start justify-between mb-3">
             <div>
-              <p className="text-sm text-gray-600">Available Bikes</p>
+              <p className="text-sm text-gray-600">Vélos Disponibles</p>
               <p className="text-3xl text-gray-900">{liveData.activeBikes.toLocaleString()}</p>
             </div>
             <Bike className="w-8 h-8 text-green-600" />
@@ -127,20 +146,20 @@ export function LiveDashboard() {
         <Card className="p-6">
           <div className="flex items-start justify-between mb-3">
             <div>
-              <p className="text-sm text-gray-600">Available Docks</p>
+              <p className="text-sm text-gray-600">Emplacements Disponibles</p>
               <p className="text-3xl text-gray-900">{liveData.availableDocks.toLocaleString()}</p>
             </div>
             <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
               <div className="w-4 h-4 border-2 border-purple-600 rounded" />
             </div>
           </div>
-          <span className="text-sm text-gray-600">60% capacity</span>
+          <span className="text-sm text-gray-600">60% de capacité</span>
         </Card>
 
         <Card className="p-6">
           <div className="flex items-start justify-between mb-3">
             <div>
-              <p className="text-sm text-gray-600">Utilization Rate</p>
+              <p className="text-sm text-gray-600">Taux d'Utilisation</p>
               <p className="text-3xl text-gray-900">{liveData.utilizationRate}%</p>
             </div>
             <TrendingUp className="w-8 h-8 text-orange-600" />
@@ -156,7 +175,7 @@ export function LiveDashboard() {
             </div>
             <AlertCircle className="w-8 h-8 text-red-600" />
           </div>
-          <span className="text-sm text-gray-600">Stations offline</span>
+          <span className="text-sm text-gray-600">Stations hors ligne</span>
         </Card>
       </div>
 
@@ -164,7 +183,7 @@ export function LiveDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
         {/* Hourly Availability */}
         <Card className="p-6">
-          <h3 className="text-lg text-gray-900 mb-4">24-Hour Availability Trend</h3>
+          <h3 className="text-lg text-gray-900 mb-4">Tendance de Disponibilité sur 24h</h3>
           <ResponsiveContainer width="100%" height={300}>
             <AreaChart data={hourlyData}>
               <CartesianGrid strokeDasharray="3 3" />
@@ -172,22 +191,22 @@ export function LiveDashboard() {
               <YAxis />
               <Tooltip />
               <Legend />
-              <Area type="monotone" dataKey="bikes" stackId="1" stroke="#10b981" fill="#86efac" name="Available Bikes" />
-              <Area type="monotone" dataKey="docks" stackId="2" stroke="#3b82f6" fill="#93c5fd" name="Available Docks" />
+              <Area type="monotone" dataKey="bikes" stackId="1" stroke="#10b981" fill="#86efac" name="Vélos Disponibles" />
+              <Area type="monotone" dataKey="docks" stackId="2" stroke="#3b82f6" fill="#93c5fd" name="Emplacements Disponibles" />
             </AreaChart>
           </ResponsiveContainer>
         </Card>
 
         {/* Arrondissement Overview */}
         <Card className="p-6">
-          <h3 className="text-lg text-gray-900 mb-4">Top Arrondissements by Utilization</h3>
+          <h3 className="text-lg text-gray-900 mb-4">Top Arrondissements par Utilisation</h3>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={arrondissementSummary}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="arr" />
               <YAxis />
               <Tooltip />
-              <Bar dataKey="utilization" fill="#3b82f6" name="Utilization %" />
+              <Bar dataKey="utilization" fill="#3b82f6" name="Utilisation %" />
             </BarChart>
           </ResponsiveContainer>
         </Card>
@@ -198,7 +217,7 @@ export function LiveDashboard() {
         {/* Critical Alerts */}
         <Card className="p-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg text-gray-900">Critical Alerts</h3>
+            <h3 className="text-lg text-gray-900">Alertes Critiques</h3>
             <Badge variant="destructive">{criticalStations.length}</Badge>
           </div>
           <div className="space-y-3">
@@ -216,7 +235,7 @@ export function LiveDashboard() {
 
         {/* Top Stations */}
         <Card className="p-6 lg:col-span-2">
-          <h3 className="text-lg text-gray-900 mb-4">Station Status Overview</h3>
+          <h3 className="text-lg text-gray-900 mb-4">Aperçu de l'État des Stations</h3>
           <div className="space-y-3">
             {topStations.map((station) => (
               <div key={station.id} className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg">
@@ -229,15 +248,15 @@ export function LiveDashboard() {
                   <div className="flex items-center gap-4 text-sm text-gray-600">
                     <span className="flex items-center gap-1">
                       <Bike className="w-4 h-4" />
-                      {station.bikes} bikes
+                      {station.bikes} vélos
                     </span>
-                    <span>{station.docks} docks</span>
-                    <span className="text-xs">Capacity: {station.capacity}</span>
+                    <span>{station.docks} places</span>
+                    <span className="text-xs">Capacité: {station.capacity}</span>
                   </div>
                 </div>
                 <div className="text-right">
                   <Progress value={(station.bikes / station.capacity) * 100} className="w-24 mb-1" />
-                  <p className="text-xs text-gray-600">{Math.round((station.bikes / station.capacity) * 100)}% full</p>
+                  <p className="text-xs text-gray-600">{Math.round((station.bikes / station.capacity) * 100)}% plein</p>
                 </div>
               </div>
             ))}
