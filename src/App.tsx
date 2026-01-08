@@ -1,8 +1,9 @@
 import { useState, lazy, Suspense, memo } from 'react';
 import { Header } from './components/Header';
-import { LandingPage } from './components/LandingPage';
-import { LoginPage } from './components/LoginPage';
-import { RegisterPage } from './components/RegisterPage';
+import { VeloLandingPage } from './components/VeloLandingPage';
+import { VeloLogin } from './components/VeloLogin';
+import { VeloSignup } from './components/VeloSignup';
+import { VeloPreloader } from './components/VeloPreloader';
 
 // Lazy load dashboard components for better performance
 const LiveDashboard = lazy(() => import('./components/LiveDashboard').then(m => ({ default: m.LiveDashboard })));
@@ -23,9 +24,11 @@ const LoadingFallback = memo(() => (
 LoadingFallback.displayName = 'LoadingFallback';
 
 export default function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(() => {
+    return localStorage.getItem('isAuthenticated') === 'true';
+  });
   const [currentPage, setCurrentPage] = useState<'landing' | 'login' | 'register' | 'dashboard'>('landing');
   const [activeView, setActiveView] = useState('live');
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   const handleLogin = () => {
     setIsAuthenticated(true);
@@ -45,12 +48,24 @@ export default function App() {
   // Render landing, login, or register pages
   if (!isAuthenticated) {
     if (currentPage === 'login') {
-      return <LoginPage onNavigate={setCurrentPage} onLogin={handleLogin} />;
+      return (
+        <Suspense fallback={<VeloPreloader />}>
+          <VeloLogin onNavigate={setCurrentPage} onLogin={handleLogin} />
+        </Suspense>
+      );
     }
     if (currentPage === 'register') {
-      return <RegisterPage onNavigate={setCurrentPage} onRegister={handleRegister} />;
+      return (
+        <Suspense fallback={<VeloPreloader />}>
+          <VeloSignup onNavigate={setCurrentPage} onRegister={handleRegister} />
+        </Suspense>
+      );
     }
-    return <LandingPage onNavigate={setCurrentPage} />;
+    return (
+      <Suspense fallback={<VeloPreloader />}>
+        <VeloLandingPage onNavigate={setCurrentPage} />
+      </Suspense>
+    );
   }
 
   // Render dashboard after authentication
@@ -71,7 +86,7 @@ export default function App() {
 
   return (
     <div className="flex flex-col h-screen bg-gray-50">
-      <Header activeView={activeView} onViewChange={setActiveView} />
+      <Header activeView={activeView} onViewChange={setActiveView} onLogout={handleLogout} />
       <main className="flex-1 overflow-auto">
         <Suspense fallback={<LoadingFallback />}>
           {renderView()}
