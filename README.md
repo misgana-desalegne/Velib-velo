@@ -1,7 +1,7 @@
 
   # Data Analysis Dashboard
 
-  This is a code bundle for Data Analysis Dashboard. The original project is available at https://www.figma.com/design/CltdHzOVNsJN4tXc1L3Ixt/Data-Analysis-Dashboard.
+  Velo station analysis
 
   ## Running the code
 

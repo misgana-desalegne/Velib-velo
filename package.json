@@ -1,7 +1,8 @@
 {
-      "name": "Data Analysis Dashboard",
+      "name": "data-analysis-dashboard",
       "version": "0.1.0",
       "private": true,
+      "homepage": "https://misga.github.io/Data-Analysis-Dashboard",
       "dependencies": {
             "@radix-ui/react-accordion": "^1.2.3",
             "@radix-ui/react-alert-dialog": "^1.1.6",
@@ -52,11 +53,15 @@
             "@types/react": "^19.2.7",
             "@vitejs/plugin-react-swc": "^3.10.2",
             "concurrently": "^8.2.2",
+            "gh-pages": "^6.1.1",
             "vite": "6.3.5"
       },
       "scripts": {
             "dev": "vite",
             "build": "vite build",
+            "preview": "vite preview",
+            "predeploy": "npm run build",
+            "deploy": "gh-pages -d dist",
             "backend": "cd backend && python manage.py runserver",
             "start:all": "concurrently \"npm run backend\" \"npm run dev\"",
             "setup:backend": "cd backend && python -m venv venv && venv\\Scripts\\activate && pip install -r requirements.txt && python manage.py migrate && python manage.py populate_data"
