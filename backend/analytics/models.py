@@ -1,5 +1,90 @@
 from django.db import models
 from django.utils import timezone
+from datetime import timedelta
+
+
+class ArrondissementManager(models.Manager):
+    """Custom manager for Arrondissement model"""
+    
+    def with_station_count(self):
+        """Annotate arrondissements with station count"""
+        return self.annotate(station_count=models.Count('stations'))
+    
+    def active_arrondissements(self):
+        """Get arrondissements that have at least one active station"""
+        return self.filter(stations__is_active=True).distinct()
+
+
+class BikeStationManager(models.Manager):
+    """Custom manager for BikeStation model"""
+    
+    def active_stations(self):
+        """Get only active stations"""
+        return self.filter(is_active=True)
+    
+    def by_arrondissement(self, arrondissement_code):
+        """Get stations by arrondissement code"""
+        return self.filter(arrondissement__code=arrondissement_code)
+    
+    def with_latest_status(self):
+        """Get stations with their latest status prefetched"""
+        return self.select_related('arrondissement').prefetch_related('statuses')
+
+
+class StationStatusManager(models.Manager):
+    """Custom manager for StationStatus model"""
+    
+    def recent(self, hours=24):
+        """Get status records from the last N hours"""
+        since = timezone.now() - timedelta(hours=hours)
+        return self.filter(timestamp__gte=since)
+    
+    def for_station(self, station):
+        """Get all status records for a specific station"""
+        return self.filter(station=station).order_by('-timestamp')
+    
+    def latest_for_stations(self):
+        """Get the latest status for each station"""
+        return self.order_by('station', '-timestamp').distinct('station')
+
+
+class TripManager(models.Manager):
+    """Custom manager for Trip model"""
+    
+    def in_date_range(self, start_date=None, end_date=None):
+        """Get trips within a date range"""
+        queryset = self.all()
+        if start_date:
+            queryset = queryset.filter(start_time__gte=start_date)
+        if end_date:
+            queryset = queryset.filter(start_time__lte=end_date)
+        return queryset
+    
+    def recent(self, days=30):
+        """Get trips from the last N days"""
+        since = timezone.now() - timedelta(days=days)
+        return self.filter(start_time__gte=since)
+    
+    def by_arrondissement(self, arrondissement):
+        """Get trips starting in a specific arrondissement"""
+        return self.filter(start_station__arrondissement=arrondissement)
+
+
+class DailyAnalyticsManager(models.Manager):
+    """Custom manager for DailyAnalytics model"""
+    
+    def recent(self, days=30):
+        """Get analytics from the last N days"""
+        since = timezone.now().date() - timedelta(days=days)
+        return self.filter(date__gte=since)
+    
+    def for_arrondissement(self, arrondissement):
+        """Get analytics for a specific arrondissement"""
+        return self.filter(arrondissement=arrondissement)
+    
+    def for_station(self, station):
+        """Get analytics for a specific station"""
+        return self.filter(station=station)
 
 
 class Arrondissement(models.Model):
@@ -8,6 +93,8 @@ class Arrondissement(models.Model):
     name = models.CharField(max_length=100)
     population = models.IntegerField()
     area_km2 = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    
+    objects = ArrondissementManager()
     
     class Meta:
         ordering = ['code']
@@ -28,6 +115,8 @@ class BikeStation(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
+    objects = BikeStationManager()
+    
     class Meta:
         ordering = ['station_id']
     
@@ -41,6 +130,8 @@ class StationStatus(models.Model):
     timestamp = models.DateTimeField(default=timezone.now)
     available_bikes = models.IntegerField()
     available_docks = models.IntegerField()
+    objects = StationStatusManager()
+    
     is_operational = models.BooleanField(default=True)
     
     class Meta:
@@ -75,6 +166,8 @@ class Trip(models.Model):
         ('customer', 'Customer'),
     ])
     
+    objects = TripManager()
+    
     class Meta:
         ordering = ['-start_time']
         indexes = [
@@ -97,6 +190,8 @@ class DailyAnalytics(models.Model):
     total_duration_minutes = models.IntegerField(default=0)
     average_duration_minutes = models.DecimalField(max_digits=6, decimal_places=2, default=0)
     average_utilization = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    objects = DailyAnalyticsManager()
+    
     peak_hour = models.IntegerField(null=True, blank=True)
     
     class Meta:
