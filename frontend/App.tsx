@@ -4,6 +4,7 @@ import { VeloLandingPage } from './pages/LandingPage';
 import { VeloLogin } from './features/auth/Login';
 import { VeloSignup } from './features/auth/Signup';
 import { VeloPreloader } from './shared/components/Preloader';
+import { authAPI } from './api/auth';
 
 // Lazy load dashboard components for better performance
 const LiveDashboard = lazy(() => import('./features/dashboard/LiveDashboard').then(m => ({ default: m.LiveDashboard })));
@@ -40,9 +41,26 @@ export default function App() {
     setCurrentPage('dashboard');
   };
 
-  const handleLogout = () => {
-    setIsAuthenticated(false);
-    setCurrentPage('landing');
+  const handleLogout = async () => {
+    try {
+      // Call logout API to blacklist the refresh token
+      const refreshToken = localStorage.getItem('refresh_token');
+      if (refreshToken) {
+        await authAPI.logout(refreshToken);
+      }
+    } catch (err) {
+      console.error('Logout API error:', err);
+    } finally {
+      // Clear all auth data from localStorage
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('refresh_token');
+      localStorage.removeItem('isAuthenticated');
+      localStorage.removeItem('user');
+      
+      // Reset authentication state
+      setIsAuthenticated(false);
+      setCurrentPage('landing');
+    }
   };
 
   // Render landing, login, or register pages

@@ -103,7 +103,11 @@ export function Header(props: HeaderProps) {
   const { onNavigate, isAuthenticated, onLogout } = props;
 
   const handleLogout = () => {
+    // Clear all auth data
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
     localStorage.removeItem('isAuthenticated');
+    localStorage.removeItem('user');
     closeMenu();
     onLogout();
   };

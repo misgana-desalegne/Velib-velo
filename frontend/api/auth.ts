@@ -26,7 +26,11 @@ export const authAPI = {
   },
   
   login: async (credentials: { username?: string; email?: string; password: string }) => {
-    const response = await api.post('/auth/login/', credentials);
+    // Convert email to username if only email is provided
+    const loginData = credentials.email 
+      ? { email: credentials.email, password: credentials.password }
+      : { username: credentials.username, password: credentials.password };
+    const response = await api.post('/auth/login/', loginData);
     return response.data;
   },
   
