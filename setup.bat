@@ -4,7 +4,6 @@ echo.
 
 REM Create Python virtual environment
 echo Creating Python virtual environment...
-cd backend
 python -m venv venv
 
 REM Activate virtual environment (Windows)
@@ -28,9 +27,6 @@ echo.
 echo Backend setup complete!
 echo.
 
-REM Return to root directory
-cd ..
-
 REM Install frontend dependencies
 echo Installing frontend dependencies...
 call npm install
@@ -39,7 +35,7 @@ echo.
 echo Setup complete! You can now run the application.
 echo.
 echo To start the application:
-echo 1. Start Django backend: cd backend ^&^& python manage.py runserver
+echo 1. Start Django backend: python manage.py runserver
 echo 2. Start React frontend: npm run dev
 echo.
 echo Or use: npm run start:all

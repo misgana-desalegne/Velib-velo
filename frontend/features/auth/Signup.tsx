@@ -15,6 +15,7 @@ export const VeloSignup: React.FC<VeloSignupProps> = ({ onNavigate, onRegister }
   
   const [nom, setNom] = useState('');
   const [prenom, setPrenom] = useState('');
+  const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -56,8 +57,9 @@ export const VeloSignup: React.FC<VeloSignupProps> = ({ onNavigate, onRegister }
         password,
         password2: confirmPassword,
         first_name: prenom,
-        last_name: nom
-      });
+        last_name: nom,
+        phone
+      } as any);
       
       // Store tokens and user data
       localStorage.setItem('access_token', data.access);
@@ -255,6 +257,42 @@ export const VeloSignup: React.FC<VeloSignupProps> = ({ onNavigate, onRegister }
                   }}
                 />
               </div>
+            </div>
+
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{
+                display: 'block',
+                marginBottom: '8px',
+                color: '#1a1a1a',
+                fontWeight: '600',
+                fontSize: '0.9rem'
+              }}>
+                Téléphone (optionnel)
+              </label>
+              <input
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="+33 6 12 34 56 78"
+                style={{
+                  width: '100%',
+                  padding: '14px 16px',
+                  border: '2px solid #e5e7eb',
+                  borderRadius: '12px',
+                  fontSize: '1rem',
+                  transition: 'all 0.3s',
+                  outline: 'none',
+                  backgroundColor: 'white'
+                }}
+                onFocus={(e) => {
+                  e.currentTarget.style.borderColor = '#2F80ED';
+                  e.currentTarget.style.boxShadow = '0 0 0 3px rgba(47, 128, 237, 0.1)';
+                }}
+                onBlur={(e) => {
+                  e.currentTarget.style.borderColor = '#e5e7eb';
+                  e.currentTarget.style.boxShadow = 'none';
+                }}
+              />
             </div>
 
             <div style={{ marginBottom: '20px' }}>

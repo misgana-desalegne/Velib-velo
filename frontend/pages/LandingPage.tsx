@@ -3,7 +3,7 @@ import { VeloHeader } from '../shared/components/Header';
 import { useLandingStyles } from '../shared/hooks/useLandingStyles';
 import styles from './LandingPage.module.css';
 import partnerLogo from '../assets/images/Logo-Greta.png';
-import backgroundVideo from '../assets/video background.mp4';
+import backgroundVideo from '../assets/background video.mp4';
 
 interface VeloLandingPageProps {
   onNavigate: (page: 'landing' | 'login' | 'register' | 'dashboard') => void;
@@ -17,7 +17,7 @@ export const VeloLandingPage: React.FC<VeloLandingPageProps> = ({ onNavigate }) 
   const heroImageUrl = '/Data-Analysis-Dashboard/assets/img/hero/hero-5/velo1.png';
 
   const teamMembers = [
-    { name: 'Kiros Misgana', role: 'Data Scientist', image: heroImageUrl },
+    { name: 'Kiros Misgana', role: 'Data Scientist', image: heroImageUrl, link: 'https://www.kirosit.fr/portfolio' },
     { name: 'Farial Huda', role: 'Développeur Full-Stack', image: '/Data-Analysis-Dashboard/assets/img/hero/hero-5/hero-img.svg' },
     { name: 'Rabbeg Roua', role: 'Analyste Mobilité', image: '/Data-Analysis-Dashboard/assets/img/hero/hero-5/hero-bg.svg' },
   ];
@@ -93,7 +93,13 @@ export const VeloLandingPage: React.FC<VeloLandingPageProps> = ({ onNavigate }) 
           {/* Team Grid */}
           <div className={styles.teamGrid}>
             {teamMembers.map((member, index) => (
-              <div key={index} className={styles.teamCard}>
+              <div 
+                key={index} 
+                className={styles.teamCard}
+                onClick={() => member.link && window.open(member.link, '_blank')}
+                style={{ cursor: member.link ? 'pointer' : 'default' }}
+                title={member.link ? `Visiter le portfolio de ${member.name}` : ''}
+              >
                 {/* Avatar */}
                 <div className={styles.avatarWrapper}>
                   <div

@@ -6,7 +6,6 @@ echo "Setting up Data Analysis Dashboard..."
 
 # Create Python virtual environment
 echo "Creating Python virtual environment..."
-cd backend
 python -m venv venv
 
 # Activate virtual environment (Windows)
@@ -34,9 +33,6 @@ echo ""
 echo "Backend setup complete!"
 echo ""
 
-# Return to root directory
-cd ..
-
 # Install frontend dependencies (if not already done)
 echo "Installing frontend dependencies..."
 npm install
@@ -48,4 +44,4 @@ echo "To start the application:"
 echo "1. Start Django backend: cd backend && python manage.py runserver"
 echo "2. Start React frontend: npm run dev"
 echo ""
-echo "Or use the run scripts provided."
+echo "Or use the run scripts pr
