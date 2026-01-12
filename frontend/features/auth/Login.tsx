@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { ArrowLeft } from 'lucide-react';
 import { VeloHeader } from '../../shared/components/Header';
 import { useLandingStyles } from '../../shared/hooks/useLandingStyles';
 import { authAPI } from '../../api/auth';
@@ -90,6 +91,29 @@ export const VeloLogin: React.FC<VeloLoginProps> = ({ onNavigate, onLogin }) => 
           width: '100%',
           border: '1px solid rgba(255, 255, 255, 0.3)'
         }}>
+          <button 
+            onClick={() => onNavigate('landing')}
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              color: '#666',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '0',
+              marginBottom: '30px',
+              fontSize: '0.95rem',
+              fontWeight: 600,
+              transition: 'color 0.2s',
+            }}
+            onMouseOver={(e) => e.currentTarget.style.color = '#2F80ED'}
+            onMouseOut={(e) => e.currentTarget.style.color = '#666'}
+          >
+            <ArrowLeft size={20} />
+            Retour
+          </button>
+
           <h2 style={{
             fontSize: '2.5rem',
             fontWeight: '800',

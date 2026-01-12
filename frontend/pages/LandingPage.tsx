@@ -2,6 +2,8 @@ import React from 'react';
 import { VeloHeader } from '../shared/components/Header';
 import { useLandingStyles } from '../shared/hooks/useLandingStyles';
 import styles from './LandingPage.module.css';
+import partnerLogo from '../assets/images/Logo-Greta.png';
+import backgroundVideo from '../assets/video background.mp4';
 
 interface VeloLandingPageProps {
   onNavigate: (page: 'landing' | 'login' | 'register' | 'dashboard') => void;
@@ -15,18 +17,23 @@ export const VeloLandingPage: React.FC<VeloLandingPageProps> = ({ onNavigate }) 
   const heroImageUrl = '/Data-Analysis-Dashboard/assets/img/hero/hero-5/velo1.png';
 
   const teamMembers = [
-    { name: 'Sophie Moreau', role: 'Data Scientist', image: heroImageUrl },
-    { name: 'Antoine Dubois', role: 'Développeur Full-Stack', image: '/Data-Analysis-Dashboard/assets/img/hero/hero-5/hero-img.svg' },
-    { name: 'Claire Martin', role: 'Analyste Mobilité', image: '/Data-Analysis-Dashboard/assets/img/hero/hero-5/hero-bg.svg' },
+    { name: 'Kiros Misgana', role: 'Data Scientist', image: heroImageUrl },
+    { name: 'Farial Huda', role: 'Développeur Full-Stack', image: '/Data-Analysis-Dashboard/assets/img/hero/hero-5/hero-img.svg' },
+    { name: 'Rabbeg Roua', role: 'Analyste Mobilité', image: '/Data-Analysis-Dashboard/assets/img/hero/hero-5/hero-bg.svg' },
   ];
 
   return (
     <div className={styles.container}>
-      {/* Background Image Layer - Zoomed and positioned */}
-      <div 
-        className={styles.backgroundImage}
-        style={{ backgroundImage: `url(${heroImageUrl})` }}
-      />
+      {/* Background Video Layer */}
+      <video
+        autoPlay
+        loop
+        muted
+        playsInline
+        className={styles.backgroundVideo}
+      >
+        <source src={backgroundVideo} type="video/mp4" />
+      </video>
 
       {/* Modern gradient overlay */}
       <div className={styles.gradientOverlay} />
@@ -39,19 +46,10 @@ export const VeloLandingPage: React.FC<VeloLandingPageProps> = ({ onNavigate }) 
       {/* Main Content */}
       <div className={styles.mainContent}>
         <div className={styles.contentWrapper}>
-          {/* Modern badge */}
-          <div className={styles.badge}>
-            <span className={styles.badgeText}>
-              🚴 Mobilité Urbaine Intelligente
-            </span>
-          </div>
-
-          <h1 className={styles.title}>
-            ParisCycle
-            <br />
-            <span className={styles.titleAccent}>
-              Analytics
-            </span>
+          <h1 className={styles.title} style={{ background: 'none', WebkitTextFillColor: 'initial' }}>
+            <span style={{ color: '#2f80ed' }}>Paris</span>
+            <span style={{ color: '#FFFFFF' }}>Cycle</span>
+            <span style={{ color: '#EF4135' }}> Analytics</span>
           </h1>
 
           <p className={styles.description}>
@@ -124,9 +122,18 @@ export const VeloLandingPage: React.FC<VeloLandingPageProps> = ({ onNavigate }) 
             </p>
             <div className={styles.logoContainer}>
               <img
-                src="/Data-Analysis-Dashboard/assets/img/logo/logo.svg"
-                alt="Organisation Logo"
+                src={partnerLogo}
+                alt="Partenaire - Greta Nord-Isère"
                 className={styles.logo}
+                style={{ 
+                  maxWidth: '250px', 
+                  height: 'auto', 
+                  filter: 'none', 
+                  opacity: 1,
+                  backgroundColor: 'white', /* Adding white bg just in case it's transparent text */
+                  padding: '10px',
+                  borderRadius: '8px'
+                }}
               />
             </div>
           </div>
