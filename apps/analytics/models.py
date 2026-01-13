@@ -179,9 +179,6 @@ class DailyAnalytics(models.Model):
     station = models.ForeignKey(BikeStation, on_delete=models.CASCADE, related_name='daily_analytics', null=True, blank=True)
     
     # Basic metrics
-    total_trips = models.IntegerField(default=0)
-    total_duration_minutes = models.IntegerField(default=0)
-    average_duration_minutes = models.DecimalField(max_digits=6, decimal_places=2, default=0)
     average_utilization = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     peak_hour = models.IntegerField(null=True, blank=True)
     
@@ -229,9 +226,6 @@ class WeeklyAnalytics(models.Model):
     station = models.ForeignKey(BikeStation, on_delete=models.CASCADE, related_name='weekly_analytics', null=True, blank=True)
     
     # Basic aggregated metrics
-    total_trips = models.IntegerField(default=0, help_text="Total trips for the week")
-    total_duration_minutes = models.IntegerField(default=0, help_text="Sum of all trip durations")
-    average_duration_minutes = models.DecimalField(max_digits=6, decimal_places=2, default=0, help_text="Average trip duration")
     average_utilization = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Average bike utilization rate")
     peak_day = models.IntegerField(null=True, blank=True, choices=[(i, ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'][i]) for i in range(7)], help_text="Busiest day of week (0=Monday, 6=Sunday)")
     peak_hour = models.IntegerField(null=True, blank=True, help_text="Most busy hour (0-23)")

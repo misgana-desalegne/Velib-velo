@@ -47,7 +47,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-]
+]  
 
 ROOT_URLCONF = 'projet_velib.urls'
 
@@ -174,3 +174,7 @@ SIMPLE_JWT = {
 
     'JTI_CLAIM': 'jti',
 }
+# ETL Pipeline Scheduler
+ETL_SCHEDULER_ENABLED = True
+ETL_SCHEDULER_INTERVAL_HOURS = 1
+ETL_SCHEDULER_RECORD_LIMIT = 10000
