@@ -1,4 +1,4 @@
-import { useState, useMemo, memo } from 'react';
+import { useState, useMemo, memo, useEffect } from 'react';
 import { Card } from '../../shared/ui/card';
 import { Button } from '../../shared/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../shared/ui/select';
@@ -6,6 +6,7 @@ import { Input } from '../../shared/ui/input';
 import { Search, Calendar, TrendingUp, TrendingDown } from 'lucide-react';
 import { LineChart, Line, AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { Badge } from '../../shared/ui/badge';
+import { api } from '../../api/auth';
 
 // Daily behavior data for a specific station
 const dailyBehaviorData = [
@@ -64,6 +65,45 @@ const popularStations = [
 
 export function StationBehavior() {
   const [selectedStation, setSelectedStation] = useState('gare-du-nord');
+  const [stations, setStations] = useState<any[]>([]);
+  const [stationData, setStationData] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  // Fetch stations on component mount
+  useEffect(() => {
+    const fetchStations = async () => {
+      try {
+        const response = await api.get('/stations/');
+        setStations(response.data?.results || response.data || []);
+      } catch (err) {
+        console.error('Error fetching stations:', err);
+        setError('Failed to load stations');
+      }
+    };
+    fetchStations();
+  }, []);
+
+  // Fetch station data when selected station changes
+  useEffect(() => {
+    const fetchStationData = async () => {
+      if (!selectedStation) return;
+      
+      setLoading(true);
+      setError('');
+      try {
+        const response = await api.get(`/stations/${selectedStation}/`);
+        setStationData(response.data);
+      } catch (err) {
+        console.error('Error fetching station data:', err);
+        setError('Failed to load station data');
+        // Use default data on error
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchStationData();
+  }, [selectedStation]);
 
   return (
     <div className="p-8">
@@ -90,11 +130,15 @@ export function StationBehavior() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="gare-du-nord">Gare du Nord</SelectItem>
-                <SelectItem value="champs-elysees">Champs-Élysées</SelectItem>
-                <SelectItem value="bastille">Bastille</SelectItem>
-                <SelectItem value="luxembourg">Luxembourg</SelectItem>
-                <SelectItem value="republique">République</SelectItem>
+                {stations.length > 0 ? (
+                  stations.map((station: any) => (
+                    <SelectItem key={station.id} value={station.station_id}>
+                      {station.name}
+                    </SelectItem>
+                  ))
+                ) : (
+                  <SelectItem value="loading" disabled>Loading stations...</SelectItem>
+                )}
               </SelectContent>
             </Select>
           </div>
@@ -122,7 +166,7 @@ export function StationBehavior() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
         <Card className="p-6">
           <p className="text-sm text-gray-600 mb-1">Average Daily Bikes</p>
-          <p className="text-3xl text-gray-900">24.5</p>
+          <p className="text-3xl text-gray-900">{stationData?.statuses?.[0]?.available_bikes || 24.5}</p>
           <div className="flex items-center gap-1 mt-2">
             <TrendingUp className="w-4 h-4 text-green-600" />
             <span className="text-sm text-green-600">+8.3%</span>

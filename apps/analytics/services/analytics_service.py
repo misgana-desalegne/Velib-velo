@@ -4,7 +4,7 @@ This service handles dashboard statistics and analytics computations.
 """
 from django.utils import timezone
 from datetime import timedelta
-from ..models import BikeStation, Trip
+from ..models import BikeStation
 from .station_service import StationService
 
 

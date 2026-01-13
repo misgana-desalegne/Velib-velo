@@ -1,22 +1,24 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
-    ArrondissementViewSet, BikeStationViewSet, StationStatusViewSet,
-    TripViewSet, DailyAnalyticsViewSet, live_dashboard, arrondissement_summary
+    CommuneViewSet, BikeStationViewSet, StationStatusViewSet,
+    DailyAnalyticsViewSet, AnalyticsViewSet, StationProfileViewSet,
+    live_dashboard, commune_summary
 )
 from .auth_views import RegisterView, LoginView, LogoutView, CurrentUserView
 
 router = DefaultRouter()
-router.register(r'arrondissements', ArrondissementViewSet)
+router.register(r'communes', CommuneViewSet)
 router.register(r'stations', BikeStationViewSet)
+router.register(r'stations-profile', StationProfileViewSet, basename='station-profile')
 router.register(r'status', StationStatusViewSet)
-router.register(r'trips', TripViewSet)
 router.register(r'analytics', DailyAnalyticsViewSet)
+router.register(r'advanced-analytics', AnalyticsViewSet, basename='advanced-analytics')
 
 urlpatterns = [
     path('', include(router.urls)),
     path('dashboard/live/', live_dashboard, name='live-dashboard'),
-    path('dashboard/arrondissements/', arrondissement_summary, name='arrondissement-summary'),
+    path('dashboard/communes/', commune_summary, name='commune-summary'),
     
     # Authentication endpoints
     path('auth/register/', RegisterView.as_view(), name='auth-register'),

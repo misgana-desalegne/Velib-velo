@@ -1,28 +1,28 @@
 """
-Business logic for Arrondissement operations.
-This service handles complex operations related to arrondissements.
+Business logic for Commune operations.
+This service handles complex operations related to communes.
 """
 from django.utils import timezone
 from datetime import timedelta
-from ..models import Arrondissement, BikeStation, StationStatus, Trip
+from ..models import Commune, BikeStation, StationStatus
 
 
-class ArrondissementService:
-    """Service class for Arrondissement business logic"""
+class CommuneService:
+    """Service class for Commune business logic"""
     
     @staticmethod
-    def get_arrondissement_analytics(arrondissement):
+    def get_commune_analytics(commune):
         """
-        Calculate detailed analytics for a specific arrondissement.
+        Calculate detailed analytics for a specific commune.
         
         Args:
-            arrondissement: Arrondissement instance
+            commune: Commune instance
             
         Returns:
-            dict: Analytics data including stations, bikes, trips, etc.
+            dict: Analytics data including stations, bikes, etc.
         """
-        # Get stations in this arrondissement
-        stations = BikeStation.objects.filter(arrondissement=arrondissement)
+        # Get stations in this commune
+        stations = BikeStation.objects.filter(commune=commune)
         
         # Get latest status for all stations
         latest_statuses = StationStatus.objects.filter(
@@ -34,36 +34,28 @@ class ArrondissementService:
         total_docks = sum(s.available_docks for s in latest_statuses)
         avg_utilization = sum(s.utilization_rate for s in latest_statuses) / len(latest_statuses) if latest_statuses else 0
         
-        # Get recent trips
-        thirty_days_ago = timezone.now() - timedelta(days=30)
-        trips_count = Trip.objects.filter(
-            start_station__arrondissement=arrondissement,
-            start_time__gte=thirty_days_ago
-        ).count()
-        
         return {
-            'arr': arrondissement.code,
+            'code': commune.code,
             'stations': stations.count(),
             'bikes': total_bikes,
             'docks': total_docks,
-            'trips': trips_count,
             'utilization': round(avg_utilization, 2),
-            'population': arrondissement.population,
+            'population': commune.population,
         }
     
     @staticmethod
-    def get_all_arrondissements_summary():
+    def get_all_communes_summary():
         """
-        Get summary analytics for all arrondissements.
+        Get summary analytics for all communes.
         
         Returns:
-            list: List of analytics data for each arrondissement
+            list: List of analytics data for each commune
         """
-        arrondissements = Arrondissement.objects.all()
+        communes = Commune.objects.all()
         results = []
         
-        for arr in arrondissements:
-            analytics = ArrondissementService.get_arrondissement_analytics(arr)
+        for commune in communes:
+            analytics = CommuneService.get_commune_analytics(commune)
             results.append(analytics)
         
         return results

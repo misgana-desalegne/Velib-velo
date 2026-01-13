@@ -1,22 +1,22 @@
 from rest_framework import serializers
-from .models import Arrondissement, BikeStation, StationStatus, Trip, DailyAnalytics
+from .models import Commune, BikeStation, StationStatus, DailyAnalytics
 
 
-class ArrondissementSerializer(serializers.ModelSerializer):
+class CommuneSerializer(serializers.ModelSerializer):
     stations_count = serializers.IntegerField(source='stations.count', read_only=True)
     
     class Meta:
-        model = Arrondissement
+        model = Commune
         fields = ['id', 'code', 'name', 'population', 'area_km2', 'stations_count']
 
 
 class BikeStationSerializer(serializers.ModelSerializer):
-    arrondissement_code = serializers.CharField(source='arrondissement.code', read_only=True)
+    commune_code = serializers.CharField(source='commune.code', read_only=True)
     current_status = serializers.SerializerMethodField()
     
     class Meta:
         model = BikeStation
-        fields = ['id', 'station_id', 'name', 'arrondissement', 'arrondissement_code', 
+        fields = ['id', 'station_id', 'name', 'commune', 'commune_code', 
                   'latitude', 'longitude', 'total_docks', 'is_active', 'current_status']
     
     def get_current_status(self, obj):
@@ -36,30 +36,19 @@ class StationStatusSerializer(serializers.ModelSerializer):
                   'available_docks', 'is_operational', 'utilization_rate']
 
 
-class TripSerializer(serializers.ModelSerializer):
-    start_station_name = serializers.CharField(source='start_station.name', read_only=True)
-    end_station_name = serializers.CharField(source='end_station.name', read_only=True)
-    
-    class Meta:
-        model = Trip
-        fields = ['id', 'trip_id', 'start_station', 'start_station_name', 
-                  'end_station', 'end_station_name', 'start_time', 'end_time', 
-                  'duration_minutes', 'distance_km', 'user_type']
-
-
 class DailyAnalyticsSerializer(serializers.ModelSerializer):
-    arrondissement_code = serializers.CharField(source='arrondissement.code', read_only=True)
+    commune_code = serializers.CharField(source='commune.code', read_only=True)
     station_name = serializers.CharField(source='station.name', read_only=True)
     
     class Meta:
         model = DailyAnalytics
-        fields = ['id', 'date', 'arrondissement', 'arrondissement_code', 'station', 
-                  'station_name', 'total_trips', 'total_duration_minutes', 
-                  'average_duration_minutes', 'average_utilization', 'peak_hour']
+        fields = ['id', 'date', 'commune', 'commune_code', 'station', 
+                  'station_name', 'total_trips', 'average_utilization', 'peak_hour',
+                  'shannon_entropy', 'net_flux', 'is_source', 'is_sink', 'is_ghost']
 
 
-class ArrondissementAnalyticsSerializer(serializers.Serializer):
-    """Serializer for arrondissement analytics summary"""
+class CommuneAnalyticsSerializer(serializers.Serializer):
+    """Serializer for commune analytics summary"""
     arr = serializers.CharField()
     stations = serializers.IntegerField()
     bikes = serializers.IntegerField()

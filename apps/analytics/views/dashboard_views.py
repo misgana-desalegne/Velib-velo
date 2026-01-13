@@ -5,8 +5,8 @@ Handles HTTP requests for dashboard endpoints and summary data.
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
-from ..serializers import LiveDashboardSerializer, ArrondissementAnalyticsSerializer
-from ..services import AnalyticsService, ArrondissementService
+from ..serializers import LiveDashboardSerializer, CommuneAnalyticsSerializer
+from ..services import AnalyticsService, CommuneService
 
 
 @api_view(['GET'])
@@ -25,15 +25,15 @@ def live_dashboard(request):
 
 
 @api_view(['GET'])
-def arrondissement_summary(request):
+def commune_summary(request):
     """
-    Get summary analytics for all arrondissements.
+    Get summary analytics for all communes.
     
-    GET /api/dashboard/arrondissements/
+    GET /api/dashboard/communes/
     
     Returns:
-        Response: List of analytics data for each arrondissement
+        Response: List of analytics data for each commune
     """
-    results = ArrondissementService.get_all_arrondissements_summary()
-    serializer = ArrondissementAnalyticsSerializer(results, many=True)
+    results = CommuneService.get_all_communes_summary()
+    serializer = CommuneAnalyticsSerializer(results, many=True)
     return Response(serializer.data)

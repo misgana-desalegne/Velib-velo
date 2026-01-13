@@ -2,18 +2,19 @@
 Views package - Controllers for the analytics application.
 This package contains all view controllers organized by resource.
 """
-from .arrondissement_views import ArrondissementViewSet
+from .arrondissement_views import CommuneViewSet
 from .station_views import BikeStationViewSet, StationStatusViewSet
-from .trip_views import TripViewSet
 from .analytics_views import DailyAnalyticsViewSet
-from .dashboard_views import live_dashboard, arrondissement_summary
+from .analytics_api_views import AnalyticsViewSet, StationProfileViewSet
+from .dashboard_views import live_dashboard, commune_summary
 
 __all__ = [
-    'ArrondissementViewSet',
+    'CommuneViewSet',
     'BikeStationViewSet',
     'StationStatusViewSet',
-    'TripViewSet',
     'DailyAnalyticsViewSet',
+    'AnalyticsViewSet',
+    'StationProfileViewSet',
     'live_dashboard',
-    'arrondissement_summary',
+    'commune_summary',
 ]

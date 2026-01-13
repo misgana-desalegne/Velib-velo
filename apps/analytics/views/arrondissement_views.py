@@ -1,32 +1,32 @@
 """
-Arrondissement views/controllers.
-Handles HTTP requests related to arrondissements.
+Commune views/controllers.
+Handles HTTP requests related to communes.
 """
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from ..models import Arrondissement
-from ..serializers import ArrondissementSerializer, ArrondissementAnalyticsSerializer
-from ..services import ArrondissementService
+from ..models import Commune
+from ..serializers import CommuneSerializer, CommuneAnalyticsSerializer
+from ..services import CommuneService
 
 
-class ArrondissementViewSet(viewsets.ModelViewSet):
+class CommuneViewSet(viewsets.ModelViewSet):
     """
-    ViewSet for Arrondissement model.
-    Provides CRUD operations and analytics for arrondissements.
+    ViewSet for Commune model.
+    Provides CRUD operations and analytics for communes.
     """
-    queryset = Arrondissement.objects.all()
-    serializer_class = ArrondissementSerializer
+    queryset = Commune.objects.all()
+    serializer_class = CommuneSerializer
     
     @action(detail=True, methods=['get'])
     def analytics(self, request, pk=None):
         """
-        Get detailed analytics for a specific arrondissement.
+        Get detailed analytics for a specific commune.
         
-        GET /api/arrondissements/{id}/analytics/
+        GET /api/communes/{id}/analytics/
         """
-        arrondissement = self.get_object()
-        data = ArrondissementService.get_arrondissement_analytics(arrondissement)
-        serializer = ArrondissementAnalyticsSerializer(data)
+        commune = self.get_object()
+        data = CommuneService.get_commune_analytics(commune)
+        serializer = CommuneAnalyticsSerializer(data)
         return Response(serializer.data)

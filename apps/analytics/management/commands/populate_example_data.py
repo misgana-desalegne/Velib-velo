@@ -1,7 +1,7 @@
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 from datetime import datetime, timedelta
-from apps.analytics.models import Arrondissement, BikeStation, StationStatus, Trip
+from apps.analytics.models import Arrondissement, BikeStation, StationStatus
 import random
 
 

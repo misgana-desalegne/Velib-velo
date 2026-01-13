@@ -1,17 +1,17 @@
 from django.contrib import admin
-from .models import Arrondissement, BikeStation, StationStatus, Trip, DailyAnalytics
+from .models import Commune, BikeStation, StationStatus, DailyAnalytics, WeeklyAnalytics
 
 
-@admin.register(Arrondissement)
-class ArrondissementAdmin(admin.ModelAdmin):
+@admin.register(Commune)
+class CommuneAdmin(admin.ModelAdmin):
     list_display = ['code', 'name', 'population', 'area_km2']
     search_fields = ['code', 'name']
 
 
 @admin.register(BikeStation)
 class BikeStationAdmin(admin.ModelAdmin):
-    list_display = ['station_id', 'name', 'arrondissement', 'total_docks', 'is_active']
-    list_filter = ['is_active', 'arrondissement']
+    list_display = ['station_id', 'name', 'commune', 'profile', 'total_docks', 'is_active']
+    list_filter = ['is_active', 'profile', 'commune']
     search_fields = ['station_id', 'name']
 
 
@@ -22,16 +22,37 @@ class StationStatusAdmin(admin.ModelAdmin):
     date_hierarchy = 'timestamp'
 
 
-@admin.register(Trip)
-class TripAdmin(admin.ModelAdmin):
-    list_display = ['trip_id', 'start_station', 'end_station', 'start_time', 'duration_minutes', 'user_type']
-    list_filter = ['user_type', 'start_time']
-    date_hierarchy = 'start_time'
-    search_fields = ['trip_id']
-
-
 @admin.register(DailyAnalytics)
 class DailyAnalyticsAdmin(admin.ModelAdmin):
-    list_display = ['date', 'arrondissement', 'station', 'total_trips', 'average_utilization']
-    list_filter = ['date', 'arrondissement']
+    list_display = ['date', 'commune', 'station', 'shannon_entropy', 'net_flux', 'is_source', 'is_sink', 'is_ghost']
+    list_filter = ['date', 'commune', 'is_source', 'is_sink', 'is_ghost']
     date_hierarchy = 'date'
+    readonly_fields = ['shannon_entropy', 'net_flux', 'average_hourly_delta', 'persistence_at_full', 'persistence_at_empty']
+
+
+@admin.register(WeeklyAnalytics)
+class WeeklyAnalyticsAdmin(admin.ModelAdmin):
+    list_display = ['week_start_date', 'week_end_date', 'commune', 'station', 'shannon_entropy', 'net_flux', 'is_source', 'is_sink', 'is_ghost']
+    list_filter = ['week_start_date', 'commune', 'is_source', 'is_sink', 'is_ghost']
+    date_hierarchy = 'week_start_date'
+    readonly_fields = ['shannon_entropy', 'net_flux', 'average_hourly_delta', 'persistence_at_full', 'persistence_at_empty', 'operational_hours']
+    fieldsets = (
+        ('Period', {
+            'fields': ('week_start_date', 'week_end_date')
+        }),
+        ('Location', {
+            'fields': ('commune', 'station')
+        }),
+        ('Basic Metrics', {
+            'fields': ('total_trips', 'total_duration_minutes', 'average_duration_minutes', 'average_utilization', 'peak_day', 'peak_hour')
+        }),
+        ('Signal Analysis', {
+            'fields': ('average_hourly_delta', 'shannon_entropy', 'net_flux', 'persistence_at_full', 'persistence_at_empty')
+        }),
+        ('Categorization', {
+            'fields': ('is_source', 'is_sink', 'is_ghost')
+        }),
+        ('Operations', {
+            'fields': ('operational_hours', 'maintenance_incidents')
+        }),
+    )
