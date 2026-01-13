@@ -6,7 +6,7 @@ from django.utils import timezone
 from datetime import timedelta
 import random
 
-from analytics.models import Arrondissement, BikeStation, StationStatus, Trip
+from apps.analytics.models import Arrondissement, BikeStation, StationStatus, Trip
 
 
 class Command(BaseCommand):

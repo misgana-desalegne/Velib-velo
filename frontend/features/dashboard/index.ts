@@ -4,3 +4,4 @@ export { StationBehavior } from './StationBehavior';
 export { ArrondissementAnalysis } from './ArrondissementAnalysis';
 export { MapAnalysis } from './MapAnalysis';
 export { DataUpload } from './DataUpload';
+export { VelibRealtimeStats } from './VelibRealtimeStats';

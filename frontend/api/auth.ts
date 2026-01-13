@@ -33,6 +33,16 @@ export const authAPI = {
     const response = await api.post('/auth/login/', loginData);
     return response.data;
   },
+
+  googleLogin: async (credential: string) => {
+    const response = await api.post('/auth/google/', { credential });
+    return response.data;
+  },
+
+  facebookLogin: async (accessToken: string) => {
+    const response = await api.post('/auth/facebook/', { access_token: accessToken });
+    return response.data;
+  },
   
   logout: async (refreshToken: string) => {
     const response = await api.post('/auth/logout/', { refresh_token: refreshToken });

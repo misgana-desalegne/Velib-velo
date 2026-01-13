@@ -7,6 +7,7 @@ from .station_views import BikeStationViewSet, StationStatusViewSet
 from .trip_views import TripViewSet
 from .analytics_views import DailyAnalyticsViewSet
 from .dashboard_views import live_dashboard, arrondissement_summary
+from .velib_realtime_views import velib_realtime
 
 __all__ = [
     'ArrondissementViewSet',
@@ -16,4 +17,5 @@ __all__ = [
     'DailyAnalyticsViewSet',
     'live_dashboard',
     'arrondissement_summary',
+    'velib_realtime',
 ]

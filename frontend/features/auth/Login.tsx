@@ -1,8 +1,15 @@
 import React, { useState } from 'react';
 import { ArrowLeft, Facebook, Mail } from 'lucide-react';
+import { GoogleLogin } from '@react-oauth/google';
 import { VeloHeader } from '../../shared/components/Header';
 import { useLandingStyles } from '../../shared/hooks/useLandingStyles';
 import { authAPI } from '../../api/auth';
+
+declare global {
+  interface Window {
+    FB: any;
+  }
+}
 
 interface VeloLoginProps {
   onNavigate: (page: 'landing' | 'login' | 'register' | 'dashboard') => void;
@@ -18,6 +25,88 @@ export const VeloLogin: React.FC<VeloLoginProps> = ({ onNavigate, onLogin }) => 
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
+  const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
+  const facebookAppId = import.meta.env.VITE_FACEBOOK_APP_ID as string | undefined;
+
+  const ensureFacebookSdk = async () => {
+    if (window.FB) return;
+    await new Promise<void>((resolve, reject) => {
+      const existing = document.getElementById('facebook-jssdk');
+      if (existing) {
+        resolve();
+        return;
+      }
+
+      const script = document.createElement('script');
+      script.id = 'facebook-jssdk';
+      script.src = 'https://connect.facebook.net/en_US/sdk.js';
+      script.async = true;
+      script.defer = true;
+      script.onload = () => resolve();
+      script.onerror = () => reject(new Error('Failed to load Facebook SDK'));
+      document.body.appendChild(script);
+    });
+
+    if (!facebookAppId) {
+      throw new Error('VITE_FACEBOOK_APP_ID is not set');
+    }
+
+    window.FB?.init({
+      appId: facebookAppId,
+      cookie: true,
+      xfbml: false,
+      version: 'v19.0',
+    });
+  };
+
+  const handleGoogleSuccess = async (credential?: string) => {
+    if (!credential) {
+      setError('Connexion Google: credential manquant');
+      return;
+    }
+    setError('');
+    setLoading(true);
+    try {
+      const data = await authAPI.googleLogin(credential);
+      localStorage.setItem('access_token', data.access);
+      localStorage.setItem('refresh_token', data.refresh);
+      localStorage.setItem('isAuthenticated', 'true');
+      localStorage.setItem('user', JSON.stringify(data.user));
+      onLogin();
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Connexion Google impossible');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleFacebookLogin = async () => {
+    setError('');
+    setLoading(true);
+    try {
+      await ensureFacebookSdk();
+      const response = await new Promise<any>((resolve) => {
+        window.FB.login((res: any) => resolve(res), { scope: 'email,public_profile' });
+      });
+
+      const accessToken = response?.authResponse?.accessToken;
+      if (!accessToken) {
+        throw new Error('Facebook login cancelled or no access token');
+      }
+
+      const data = await authAPI.facebookLogin(accessToken);
+      localStorage.setItem('access_token', data.access);
+      localStorage.setItem('refresh_token', data.refresh);
+      localStorage.setItem('isAuthenticated', 'true');
+      localStorage.setItem('user', JSON.stringify(data.user));
+      onLogin();
+    } catch (err: any) {
+      setError(err.response?.data?.error || err.message || 'Connexion Facebook impossible');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -48,25 +137,7 @@ export const VeloLogin: React.FC<VeloLoginProps> = ({ onNavigate, onLogin }) => 
   };
 
   return (
-    <div style={{ 
-      minHeight: '100vh',
-      display: 'flex',
-      flexDirection: 'column',
-      backgroundImage: 'url(/assets/img/hero/hero-5/velo1.png)',
-      backgroundSize: 'cover',
-      backgroundPosition: 'center',
-      backgroundRepeat: 'no-repeat',
-      position: 'relative'
-    }}>
-      <div style={{
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        background: 'rgba(0, 0, 0, 0.5)',
-        zIndex: 0
-      }}></div>
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
 
       <div style={{ position: 'relative', zIndex: 2 }}>
         <VeloHeader onNavigate={onNavigate} isAuthenticated={false} onLogout={() => {}} />
@@ -367,6 +438,67 @@ export const VeloLogin: React.FC<VeloLoginProps> = ({ onNavigate, onLogin }) => 
               </button>
             </div>
           </form>
+
+          <div style={{ marginTop: '25px' }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              margin: '18px 0'
+            }}>
+              <div style={{ height: 1, background: 'rgba(0,0,0,0.12)', flex: 1 }} />
+              <span style={{ color: '#666', fontWeight: 700, fontSize: '0.85rem' }}>OU</span>
+              <div style={{ height: 1, background: 'rgba(0,0,0,0.12)', flex: 1 }} />
+            </div>
+
+            <div style={{ display: 'grid', gap: '12px' }}>
+              {googleClientId ? (
+                <div style={{ display: 'flex', justifyContent: 'center' }}>
+                  <GoogleLogin
+                    onSuccess={(cred) => handleGoogleSuccess(cred.credential)}
+                    onError={() => setError('Connexion Google impossible')}
+                    useOneTap={false}
+                  />
+                </div>
+              ) : (
+                <div style={{
+                  padding: '12px 14px',
+                  borderRadius: '14px',
+                  border: '1px dashed rgba(0,0,0,0.18)',
+                  background: 'rgba(255,255,255,0.7)',
+                  color: '#666',
+                  fontSize: '0.9rem',
+                  textAlign: 'center'
+                }}>
+                  Connexion Google non configurée (ajoutez <b>VITE_GOOGLE_CLIENT_ID</b>)
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={handleFacebookLogin}
+                disabled={loading}
+                style={{
+                  width: '100%',
+                  padding: '14px 16px',
+                  borderRadius: '14px',
+                  border: '1px solid rgba(0,0,0,0.08)',
+                  background: '#1877F2',
+                  color: 'white',
+                  fontWeight: 700,
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '10px'
+                }}
+                title={facebookAppId ? '' : 'Configure VITE_FACEBOOK_APP_ID to enable Facebook login'}
+              >
+                <Facebook size={18} />
+                Continuer avec Facebook
+              </button>
+            </div>
+          </div>
 
           <div style={{
             textAlign: 'center',

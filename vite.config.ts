@@ -59,7 +59,9 @@
       open: true,
       proxy: {
         '/api': {
-          target: 'http://localhost:8000',
+          // Avoid IPv6 localhost (::1) mismatch on Windows; Django dev server
+          // typically binds to 127.0.0.1 by default.
+          target: 'http://127.0.0.1:8000',
           changeOrigin: true,
         },
       },

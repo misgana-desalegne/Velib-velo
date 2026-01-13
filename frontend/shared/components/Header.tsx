@@ -14,7 +14,7 @@ interface DashboardHeaderProps {
 // Landing/Auth Header Props
 interface LandingHeaderProps {
   variant: 'landing';
-  onNavigate: (page: 'landing' | 'login' | 'register' | 'dashboard') => void;
+  onNavigate: (page: 'landing' | 'login' | 'register' | 'dashboard' | 'farial' | 'velib') => void;
   isAuthenticated: boolean;
   onLogout: () => void;
 }
@@ -41,6 +41,7 @@ export function Header(props: HeaderProps) {
       { id: 'behavior', label: 'Comportement des Stations', icon: TrendingUp },
       { id: 'arrondissement', label: 'Par Arrondissement', icon: Building2 },
       { id: 'map', label: 'Vue Cartographique', icon: Map },
+      { id: 'velib', label: 'Vélib Temps Réel', icon: Bike },
     ];
 
     return (

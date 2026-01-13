@@ -4,7 +4,7 @@
   display: flex;
   flex-direction: column;
   position: relative;
-  background: linear-gradient(135deg, #0a1628 0%, #1a2332 100%);
+  background: transparent;
 }
 
 /* Background Layers */
@@ -23,26 +23,7 @@
   filter: blur(2px);
 }
 
-.backgroundVideo {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  opacity: 0.8;
-  z-index: 0;
-}
-
-.gradientOverlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: linear-gradient(135deg, rgba(31, 169, 113, 0.15) 0%, rgba(10, 22, 40, 0.8) 50%, rgba(0, 0, 0, 0.85) 100%);
-  z-index: 1;
-}
+/* backgroundVideo + gradientOverlay are now provided by BackgroundShell */
 
 /* Header */
 .header {
@@ -169,8 +150,8 @@
 .teamSection {
   position: relative;
   z-index: 10;
-  background: rgba(10, 22, 40, 0.6);
-  backdrop-filter: blur(20px);
+  background: rgba(10, 22, 40, 0.35);
+  backdrop-filter: blur(12px);
   padding: 80px 20px;
 }
 

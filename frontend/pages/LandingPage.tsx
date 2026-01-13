@@ -3,10 +3,10 @@ import { VeloHeader } from '../shared/components/Header';
 import { useLandingStyles } from '../shared/hooks/useLandingStyles';
 import styles from './LandingPage.module.css';
 import partnerLogo from '../assets/images/Logo-Greta.png';
-import backgroundVideo from '../assets/background video.mp4';
+// import farialImg from '../assets/images/img/farial.png';
 
 interface VeloLandingPageProps {
-  onNavigate: (page: 'landing' | 'login' | 'register' | 'dashboard') => void;
+  onNavigate: (page: 'landing' | 'login' | 'register' | 'dashboard' | 'farial' | 'velib') => void;
 }
 
 export const VeloLandingPage: React.FC<VeloLandingPageProps> = ({ onNavigate }) => {
@@ -18,26 +18,12 @@ export const VeloLandingPage: React.FC<VeloLandingPageProps> = ({ onNavigate }) 
 
   const teamMembers = [
     { name: 'Kiros Misgana', role: 'Data Scientist', image: heroImageUrl, link: 'https://www.kirosit.fr/portfolio' },
-    { name: 'Farial Huda', role: 'Développeur Full-Stack', image: '/Data-Analysis-Dashboard/assets/img/hero/hero-5/hero-img.svg' },
+    { name: 'Farial Huda', role: 'Développeur Full-Stack', image: '/Data-Analysis-Dashboard/assets/img/farial.png' },
     { name: 'Rabbeg Roua', role: 'Analyste Mobilité', image: '/Data-Analysis-Dashboard/assets/img/hero/hero-5/hero-bg.svg' },
   ];
 
   return (
     <div className={styles.container}>
-      {/* Background Video Layer */}
-      <video
-        autoPlay
-        loop
-        muted
-        playsInline
-        className={styles.backgroundVideo}
-      >
-        <source src={backgroundVideo} type="video/mp4" />
-      </video>
-
-      {/* Modern gradient overlay */}
-      <div className={styles.gradientOverlay} />
-
       {/* Header */}
       <div className={styles.header}>
         <VeloHeader onNavigate={onNavigate} isAuthenticated={false} onLogout={() => {}} />
@@ -73,6 +59,14 @@ export const VeloLandingPage: React.FC<VeloLandingPageProps> = ({ onNavigate }) 
             >
               Inscription
             </button>
+
+            {/* Public realtime stats */}
+            <button
+              onClick={() => onNavigate('velib')}
+              className={styles.buttonSecondary}
+            >
+              Statistiques Vélib (Live)
+            </button>
           </div>
         </div>
       </div>
@@ -96,9 +90,15 @@ export const VeloLandingPage: React.FC<VeloLandingPageProps> = ({ onNavigate }) 
               <div 
                 key={index} 
                 className={styles.teamCard}
-                onClick={() => member.link && window.open(member.link, '_blank')}
-                style={{ cursor: member.link ? 'pointer' : 'default' }}
-                title={member.link ? `Visiter le portfolio de ${member.name}` : ''}
+                onClick={() => {
+                  if (member.name === 'Farial Huda') {
+                    onNavigate('farial');
+                  } else if (member.link) {
+                    window.open(member.link, '_blank');
+                  }
+                }}
+                style={{ cursor: (member.link || member.name === 'Farial Huda') ? 'pointer' : 'default' }}
+                title={member.link || member.name === 'Farial Huda' ? `Voir le profil de ${member.name}` : ''}
               >
                 {/* Avatar */}
                 <div className={styles.avatarWrapper}>

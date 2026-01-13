@@ -82,25 +82,7 @@ export const VeloSignup: React.FC<VeloSignupProps> = ({ onNavigate, onRegister }
   };
 
   return (
-    <div style={{ 
-      minHeight: '100vh',
-      display: 'flex',
-      flexDirection: 'column',
-      backgroundImage: 'url(/assets/img/about/about-4/velo3.png)',
-      backgroundSize: 'cover',
-      backgroundPosition: 'center',
-      backgroundRepeat: 'no-repeat',
-      position: 'relative'
-    }}>
-      <div style={{
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        background: 'rgba(0, 0, 0, 0.5)',
-        zIndex: 0
-      }}></div>
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
 
       <div style={{ position: 'relative', zIndex: 2 }}>
         <VeloHeader onNavigate={onNavigate} isAuthenticated={false} onLogout={() => {}} />
