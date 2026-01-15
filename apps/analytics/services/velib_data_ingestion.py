@@ -96,22 +96,22 @@ class VelibDataIngestionService:
         available_mechanical = int(fields.get('mechanical', 0))
         
         return {
-            'station_id': str(fields.get('stationcode', '')),
+            'stationcode': str(fields.get('stationcode', '')),
             'name': fields.get('name', ''),
-            'commune_code': VelibDataIngestionService.extract_commune_code(
+            'code_insee_commune': VelibDataIngestionService.extract_commune_code(
                 fields.get('code_insee_commune', '')
             ),
-            'commune_name': fields.get('nom_arrondissement_communes', ''),
-            'latitude': Decimal(str(coordinates[1])) if len(coordinates) > 1 else Decimal('0'),
-            'longitude': Decimal(str(coordinates[0])) if len(coordinates) > 0 else Decimal('0'),
-            'total_docks': int(fields.get('capacity', 0)),
-            'available_bikes': total_bikes,
-            'available_ebikes': available_ebikes,
-            'available_mechanical': available_mechanical,
+            'nom_arrondissement_communes': fields.get('nom_arrondissement_communes', ''),
+            'latitude': float(coordinates[1]) if len(coordinates) > 1 else 0.0,
+            'longitude': float(coordinates[0]) if len(coordinates) > 0 else 0.0,
+            'capacity': int(fields.get('capacity', 0)),
+            'numbikesavailable': total_bikes,
+            'ebike': available_ebikes,
+            'mechanical': available_mechanical,
             'is_installed': fields.get('is_installed', '').upper() == 'OUI',
             'is_renting': fields.get('is_renting', '').upper() == 'OUI',
             'is_returning': fields.get('is_returning', '').upper() == 'OUI',
-            'timestamp': timezone.now(),
+            'duedate': timezone.now(),
         }
     
     @staticmethod
@@ -152,26 +152,32 @@ class VelibDataIngestionService:
             try:
                 parsed = VelibDataIngestionService.parse_station_record(record)
                 
-                if not parsed['station_id'] or not parsed['commune_code']:
+                if not parsed['stationcode'] or not parsed['code_insee_commune']:
                     skipped += 1
                     continue
                 
                 # Get or create commune
                 commune, _ = Commune.objects.get_or_create(
-                    code=parsed['commune_code'],
-                    defaults={'name': parsed.get('commune_name', f"Commune {parsed['commune_code']}"), 'population': 0}
+                    code=parsed['code_insee_commune'],
+                    defaults={'name': parsed.get('nom_arrondissement_communes', f"Commune {parsed['code_insee_commune']}"), 'population': 0}
                 )
                 
                 # Get or create bike station
                 station, created = BikeStation.objects.get_or_create(
-                    station_id=parsed['station_id'],
+                    stationcode=parsed['stationcode'],
                     defaults={
                         'name': parsed['name'],
                         'commune': commune,
                         'latitude': parsed['latitude'],
                         'longitude': parsed['longitude'],
-                        'total_docks': parsed['total_docks'],
-                        'is_active': parsed['is_installed'] and parsed['is_renting'],
+                        'capacity': parsed['capacity'],
+                        'is_installed': parsed['is_installed'] and parsed['is_renting'],
+                        'numbikesavailable': parsed['numbikesavailable'],
+                        'numdocksavailable': max(0, parsed['capacity'] - parsed['numbikesavailable']),
+                        'mechanical': parsed['mechanical'],
+                        'ebike': parsed['ebike'],
+                        'is_renting': parsed['is_renting'],
+                        'is_returning': parsed['is_returning'],
                     }
                 )
                 
@@ -182,19 +188,23 @@ class VelibDataIngestionService:
                     station.name = parsed['name']
                     station.latitude = parsed['latitude']
                     station.longitude = parsed['longitude']
-                    station.total_docks = parsed['total_docks']
-                    station.is_active = parsed['is_installed'] and parsed['is_renting']
+                    station.capacity = parsed['capacity']
+                    station.is_installed = parsed['is_installed'] and parsed['is_renting']
+                    station.numbikesavailable = parsed['numbikesavailable']
+                    station.numdocksavailable = max(0, parsed['capacity'] - parsed['numbikesavailable'])
+                    station.mechanical = parsed['mechanical']
+                    station.ebike = parsed['ebike']
+                    station.is_renting = parsed['is_renting']
+                    station.is_returning = parsed['is_returning']
                     station.save()
                     updated_stations += 1
                 
                 # Create status record
-                available_docks = parsed['total_docks'] - parsed['available_bikes']
-                
                 status = StationStatus.objects.create(
                     station=station,
-                    timestamp=parsed['timestamp'],
-                    available_bikes=parsed['available_bikes'],
-                    available_docks=max(0, available_docks),
+                    timestamp=parsed['duedate'],
+                    available_bikes=parsed['numbikesavailable'],
+                    available_docks=max(0, parsed['capacity'] - parsed['numbikesavailable']),
                     is_operational=parsed['is_installed'] and (parsed['is_renting'] or parsed['is_returning'])
                 )
                 created_statuses += 1

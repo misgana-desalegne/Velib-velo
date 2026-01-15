@@ -99,7 +99,7 @@ export const VeloLogin: React.FC<VeloLoginProps> = ({ onNavigate, onLogin }) => 
             marginBottom: '10px',
             textAlign: 'center'
           }}>
-            Bon retour !
+            Bienvenue!
           </h2>
           <p style={{
             color: '#666',

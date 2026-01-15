@@ -93,7 +93,7 @@ class AnalyticsViewSet(viewsets.ReadOnlyModelViewSet):
 
 class StationProfileViewSet(viewsets.ReadOnlyModelViewSet):
     """ViewSet for station profiles"""
-    queryset = BikeStation.objects.filter(is_active=True)
+    queryset = BikeStation.objects.filter(is_installed=True)
     
     def get_serializer(self, *args, **kwargs):
         from rest_framework import serializers
@@ -104,8 +104,8 @@ class StationProfileViewSet(viewsets.ReadOnlyModelViewSet):
             
             class Meta:
                 model = BikeStation
-                fields = ['id', 'station_id', 'name', 'commune', 'profile', 
-                         'profile_display', 'latitude', 'longitude', 'total_docks', 
+                fields = ['id', 'stationcode', 'name', 'commune', 'profile', 
+                         'profile_display', 'latitude', 'longitude', 'capacity', 
                          'latest_analytics']
             
             def get_latest_analytics(self, obj):

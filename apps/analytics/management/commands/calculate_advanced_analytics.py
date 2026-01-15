@@ -57,9 +57,9 @@ class Command(BaseCommand):
         
         # Get stations
         if options['station_id']:
-            stations = BikeStation.objects.filter(station_id=options['station_id'])
+            stations = BikeStation.objects.filter(stationcode=options['station_id'])
         else:
-            stations = BikeStation.objects.filter(is_active=True)
+            stations = BikeStation.objects.filter(is_installed=True)
         
         total_stations = stations.count()
         self.stdout.write(f"Processing {total_stations} stations...")

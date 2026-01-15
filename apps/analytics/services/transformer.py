@@ -47,31 +47,43 @@ class DataCleaner:
         
         df = pd.DataFrame(flattened)
         
-        # Standardize column names
+        # Standardize column names to match BikeStation model
         column_mapping = {
-            'stationcode': 'station_id',
-            'station_code': 'station_id',
-            'name': 'station_name',
-            'nom_station': 'station_name',
-            'duedate': 'timestamp',
-            'record_timestamp': 'timestamp',
-            'numbikesavailable': 'available_bikes',
-            'numdocksavailable': 'available_docks',
-            'dockavail': 'available_docks',
-            'dock_avail': 'available_docks',
-            'docksavailable': 'available_docks',
-            'nbebikesavail': 'available_bikes',
-            'nb_ebikes_avail': 'available_bikes',
-            'bikestavailable': 'available_bikes',
+            'station_code': 'stationcode',
+            'station_id': 'stationcode',
+            'nom_station': 'name',
+            'duedate': 'duedate',
+            'record_timestamp': 'duedate',
+            'timestamp': 'duedate',
+            'numbikesavailable': 'numbikesavailable',
+            'available_bikes': 'numbikesavailable',
+            'nbebikesavail': 'numbikesavailable',
+            'nb_ebikes_avail': 'numbikesavailable',
+            'bikestavailable': 'numbikesavailable',
+            'numdocksavailable': 'numdocksavailable',
+            'available_docks': 'numdocksavailable',
+            'dockavail': 'numdocksavailable',
+            'dock_avail': 'numdocksavailable',
+            'docksavailable': 'numdocksavailable',
+            'capacity': 'capacity',
+            'total_docks': 'capacity',
+            'ebike': 'ebike',
+            'nbebikes': 'ebike',
+            'mechanical': 'mechanical',
+            'nbmechanical': 'mechanical',
+            'is_renting': 'is_renting',
+            'is_returning': 'is_returning',
+            'is_installed': 'is_installed',
+            'is_open': 'is_installed',
+            'status': 'is_installed',
             'geom': 'geometry',
             'geo_point_2d': 'geometry',
             'coordonnees_geo': 'coordinates',
-            'commune': 'commune_name',
-            'libelle_commune': 'commune_name',
-            'code_insee_commune': 'commune_code',
-            'arrondissement': 'arrondissement_name',
-            'libelle_arrondissement': 'arrondissement_name',
-            'nom_arrondissement_communes': 'commune_name',
+            'commune': 'nom_arrondissement_communes',
+            'libelle_commune': 'nom_arrondissement_communes',
+            'code_insee_commune': 'code_insee_commune',
+            'arrondissement': 'nom_arrondissement_communes',
+            'libelle_arrondissement': 'nom_arrondissement_communes',
         }
         
         df.rename(columns=column_mapping, inplace=True)
@@ -83,17 +95,41 @@ class DataCleaner:
             df['latitude'] = coords.apply(lambda x: x[0] if x else None)
             df['longitude'] = coords.apply(lambda x: x[1] if x else None)
         
+        # Parse coordonnees_geo if present (format: "lat, lon" as string)
+        if 'coordonnees_geo' in df.columns and 'latitude' not in df.columns:
+            try:
+                coords_split = df['coordonnees_geo'].str.split(', ', expand=True, n=1)
+                if len(coords_split.columns) >= 2:
+                    df['latitude'] = pd.to_numeric(coords_split[0], errors='coerce')
+                    df['longitude'] = pd.to_numeric(coords_split[1], errors='coerce')
+                    logger.info("Parsed latitude/longitude from coordonnees_geo")
+            except Exception as e:
+                logger.warning(f"Failed to parse coordonnees_geo: {e}")
+        
+        # Convert OUI/NON strings to boolean
+        boolean_columns = ['is_installed', 'is_renting', 'is_returning']
+        for col in boolean_columns:
+            if col in df.columns:
+                df[col] = df[col] == 'OUI'
+                logger.debug(f"Converted {col} from OUI/NON to boolean")
+        
         # Convert numeric columns
-        numeric_cols = ['available_bikes', 'available_docks', 'latitude', 'longitude', 'capacity', 'ebike', 'mechanical']
+        numeric_cols = ['numbikesavailable', 'numdocksavailable', 'latitude', 'longitude', 
+                       'capacity', 'ebike', 'mechanical', 'stationcode', 'code_insee_commune']
         for col in numeric_cols:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce')
         
-        # Parse timestamp if present
-        timestamp_cols = ['timestamp', 'time', 'date', 'duedate', 'last_update', 'record_timestamp']
-        for col in timestamp_cols:
-            if col in df.columns:
-                df[col] = pd.to_datetime(df[col], errors='coerce', utc=True)
+        # Parse duedate timestamp
+        if 'duedate' in df.columns:
+            df['duedate'] = pd.to_datetime(df['duedate'], errors='coerce', utc=True)
+        
+        # Drop unnecessary columns
+        cols_to_drop = ['coordonnees_geo', 'station_opening_hours']
+        existing_drop_cols = [col for col in cols_to_drop if col in df.columns]
+        if existing_drop_cols:
+            df = df.drop(columns=existing_drop_cols)
+            logger.debug(f"Dropped columns: {existing_drop_cols}")
         
         # Drop columns with non-hashable types (like lists) before drop_duplicates
         for col in df.columns:
@@ -111,7 +147,7 @@ class DataCleaner:
         df = df.drop_duplicates()
         
         # Remove rows with critical missing values
-        critical_cols = ['station_id', 'available_bikes', 'available_docks']
+        critical_cols = ['stationcode', 'numbikesavailable', 'numdocksavailable']
         df = df.dropna(subset=[col for col in critical_cols if col in df.columns], how='any')
         
         logger.info(f"Cleaned {len(df)} records")
@@ -132,17 +168,17 @@ class DataCleaner:
         df_copy = df.copy()
         
         # Check for negative values
-        if 'available_bikes' in df.columns:
-            negative_bikes = df_copy[df_copy['available_bikes'] < 0].shape[0]
+        if 'numbikesavailable' in df.columns:
+            negative_bikes = df_copy[df_copy['numbikesavailable'] < 0].shape[0]
             if negative_bikes > 0:
                 issues.append(f"Found {negative_bikes} records with negative bikes")
-                df_copy = df_copy[df_copy['available_bikes'] >= 0]
+                df_copy = df_copy[df_copy['numbikesavailable'] >= 0]
         
-        if 'available_docks' in df.columns:
-            negative_docks = df_copy[df_copy['available_docks'] < 0].shape[0]
+        if 'numdocksavailable' in df.columns:
+            negative_docks = df_copy[df_copy['numdocksavailable'] < 0].shape[0]
             if negative_docks > 0:
                 issues.append(f"Found {negative_docks} records with negative docks")
-                df_copy = df_copy[df_copy['available_docks'] >= 0]
+                df_copy = df_copy[df_copy['numdocksavailable'] >= 0]
         
         # Check for invalid coordinates
         if 'latitude' in df.columns and 'longitude' in df.columns:
@@ -170,18 +206,18 @@ class DataTransformer:
         Calculate utilization rate (percentage of available bikes)
         
         Args:
-            df: DataFrame with available_bikes and available_docks
+            df: DataFrame with numbikesavailable and numdocksavailable
             
         Returns:
             Series with utilization rates (0-100)
         """
-        total = df['available_bikes'] + df['available_docks']
-        utilization = (df['available_bikes'] / total * 100).fillna(0)
+        total = df['numbikesavailable'] + df['numdocksavailable']
+        utilization = (df['numbikesavailable'] / total * 100).fillna(0)
         return utilization.round(2)
     
     @staticmethod
-    def aggregate_daily(df: pd.DataFrame, station_col: str = 'station_id', 
-                       date_col: str = 'timestamp') -> pd.DataFrame:
+    def aggregate_daily(df: pd.DataFrame, station_col: str = 'stationcode', 
+                       date_col: str = 'duedate') -> pd.DataFrame:
         """
         Aggregate data to daily level
         
@@ -203,26 +239,26 @@ class DataTransformer:
         
         # Group by date and station
         daily_agg = df_copy.groupby(['date', station_col]).agg({
-            'available_bikes': ['mean', 'min', 'max', 'std'],
-            'available_docks': ['mean', 'min', 'max', 'std'],
+            'numbikesavailable': ['mean', 'min', 'max', 'std'],
+            'numdocksavailable': ['mean', 'min', 'max', 'std'],
         }).reset_index()
         
         daily_agg.columns = ['date', station_col, 
-                             'avg_available_bikes', 'min_available_bikes', 'max_available_bikes', 'std_available_bikes',
-                             'avg_available_docks', 'min_available_docks', 'max_available_docks', 'std_available_docks']
+                             'avg_numbikesavailable', 'min_numbikesavailable', 'max_numbikesavailable', 'std_numbikesavailable',
+                             'avg_numdocksavailable', 'min_numdocksavailable', 'max_numdocksavailable', 'std_numdocksavailable']
         
         # Calculate average utilization
         daily_agg['avg_utilization'] = (
-            daily_agg['avg_available_bikes'] / 
-            (daily_agg['avg_available_bikes'] + daily_agg['avg_available_docks']) * 100
+            daily_agg['avg_numbikesavailable'] / 
+            (daily_agg['avg_numbikesavailable'] + daily_agg['avg_numdocksavailable']) * 100
         ).round(2)
         
         logger.info(f"Aggregated to {len(daily_agg)} daily records")
         return daily_agg
     
     @staticmethod
-    def aggregate_weekly(df: pd.DataFrame, station_col: str = 'station_id',
-                        date_col: str = 'timestamp') -> pd.DataFrame:
+    def aggregate_weekly(df: pd.DataFrame, station_col: str = 'stationcode',
+                        date_col: str = 'duedate') -> pd.DataFrame:
         """
         Aggregate data to weekly level
         
@@ -244,26 +280,26 @@ class DataTransformer:
         
         # Group by week and station
         weekly_agg = df_copy.groupby(['week_start', station_col]).agg({
-            'available_bikes': ['mean', 'min', 'max', 'std'],
-            'available_docks': ['mean', 'min', 'max', 'std'],
+            'numbikesavailable': ['mean', 'min', 'max', 'std'],
+            'numdocksavailable': ['mean', 'min', 'max', 'std'],
         }).reset_index()
         
         weekly_agg.columns = ['week_start_date', station_col,
-                              'avg_available_bikes', 'min_available_bikes', 'max_available_bikes', 'std_available_bikes',
-                              'avg_available_docks', 'min_available_docks', 'max_available_docks', 'std_available_docks']
+                              'avg_numbikesavailable', 'min_numbikesavailable', 'max_numbikesavailable', 'std_numbikesavailable',
+                              'avg_numdocksavailable', 'min_numdocksavailable', 'max_numdocksavailable', 'std_numdocksavailable']
         
         # Calculate average utilization
         weekly_agg['avg_utilization'] = (
-            weekly_agg['avg_available_bikes'] / 
-            (weekly_agg['avg_available_bikes'] + weekly_agg['avg_available_docks']) * 100
+            weekly_agg['avg_numbikesavailable'] / 
+            (weekly_agg['avg_numbikesavailable'] + weekly_agg['avg_numdocksavailable']) * 100
         ).round(2)
         
         logger.info(f"Aggregated to {len(weekly_agg)} weekly records")
         return weekly_agg
     
     @staticmethod
-    def calculate_hourly_delta(df: pd.DataFrame, station_col: str = 'station_id',
-                               timestamp_col: str = 'timestamp') -> pd.DataFrame:
+    def calculate_hourly_delta(df: pd.DataFrame, station_col: str = 'stationcode',
+                               timestamp_col: str = 'duedate') -> pd.DataFrame:
         """
         Calculate hourly change in available bikes (signal analysis)
         
@@ -280,13 +316,13 @@ class DataTransformer:
         df_copy = df_copy.sort_values([station_col, timestamp_col])
         
         # Calculate delta for each station
-        df_copy['hourly_delta'] = df_copy.groupby(station_col)['available_bikes'].diff()
+        df_copy['hourly_delta'] = df_copy.groupby(station_col)['numbikesavailable'].diff()
         
         logger.info(f"Calculated hourly deltas for {df_copy[station_col].nunique()} stations")
         return df_copy
     
     @staticmethod
-    def classify_stations(df: pd.DataFrame, station_col: str = 'station_id') -> pd.DataFrame:
+    def classify_stations(df: pd.DataFrame, station_col: str = 'stationcode') -> pd.DataFrame:
         """
         Classify stations by their behavior (source, sink, ghost, balanced)
         
@@ -310,15 +346,15 @@ class DataTransformer:
                 net_flux = 0
             
             # Calculate entropy (variability)
-            if 'available_bikes' in station_data.columns:
-                bikes_std = station_data['available_bikes'].std()
-                bikes_mean = station_data['available_bikes'].mean()
+            if 'numbikesavailable' in station_data.columns:
+                bikes_std = station_data['numbikesavailable'].std()
+                bikes_mean = station_data['numbikesavailable'].mean()
                 entropy = bikes_std / (bikes_mean + 1) if bikes_mean > 0 else 0
             else:
                 entropy = 0
             
             # Classify
-            if entropy < 0.3 and station_data['available_bikes'].mean() < 2:
+            if entropy < 0.3 and station_data['numbikesavailable'].mean() < 2:
                 classification = 'ghost_station'
             elif net_flux > 10:
                 classification = 'source'
@@ -373,17 +409,17 @@ class Transformer:
             return {}
         
         # Step 3: Add utilization rate
-        if 'available_bikes' in df_clean.columns and 'available_docks' in df_clean.columns:
+        if 'numbikesavailable' in df_clean.columns and 'numdocksavailable' in df_clean.columns:
             df_clean['utilization_rate'] = self.transformer.calculate_utilization_rate(df_clean)
         
         # Step 4: Calculate deltas for signal analysis
-        if 'timestamp' in df_clean.columns:
+        if 'duedate' in df_clean.columns:
             df_clean = self.transformer.calculate_hourly_delta(df_clean)
         
         # Step 5: Create aggregations
         result = {'raw': df_clean}
         
-        if 'timestamp' in df_clean.columns:
+        if 'duedate' in df_clean.columns:
             result['daily'] = self.transformer.aggregate_daily(df_clean)
             result['weekly'] = self.transformer.aggregate_weekly(df_clean)
         

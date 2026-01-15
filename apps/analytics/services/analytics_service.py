@@ -21,7 +21,7 @@ class AnalyticsService:
         """
         # Get all stations count
         total_stations = BikeStation.objects.count()
-        active_stations = BikeStation.objects.filter(is_active=True).count()
+        active_stations = BikeStation.objects.filter(is_installed=True).count()
         
         # Get latest status for all active stations
         stations_with_status = StationService.get_active_stations_with_status()

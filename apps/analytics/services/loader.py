@@ -23,8 +23,8 @@ class CommuneLoader:
     """Load commune data into database"""
     
     @staticmethod
-    def load_communes(df: pd.DataFrame, code_col: str = 'commune_code',
-                     name_col: str = 'commune_name') -> Dict[str, int]:
+    def load_communes(df: pd.DataFrame, code_col: str = 'code_insee_commune',
+                     name_col: str = 'nom_arrondissement_communes') -> Dict[str, int]:
         """
         Load or update communes from DataFrame
         
@@ -37,6 +37,18 @@ class CommuneLoader:
             Dictionary mapping commune codes to IDs
         """
         communes_dict = {}
+        
+        # Check if columns exist in dataframe
+        if code_col not in df.columns or name_col not in df.columns:
+            logger.warning(f"Commune columns not found in DataFrame. Expected: {code_col}, {name_col}")
+            logger.info("Creating default Paris commune")
+            # Create default commune for Paris
+            commune, _ = Commune.objects.get_or_create(
+                code='75056',
+                defaults={'name': 'Paris', 'population': 2161000}
+            )
+            communes_dict['75056'] = commune.id
+            return communes_dict
         
         # Extract unique communes
         commune_data = df[[code_col, name_col]].drop_duplicates()
@@ -70,14 +82,14 @@ class BikeStationLoader:
     
     @staticmethod
     def load_stations(df: pd.DataFrame, communes_dict: Dict[str, int],
-                     station_id_col: str = 'station_id',
-                     name_col: str = 'station_name',
+                     station_id_col: str = 'stationcode',
+                     name_col: str = 'name',
                      lat_col: str = 'latitude',
                      lon_col: str = 'longitude',
                      capacity_col: str = 'capacity',
-                     commune_code_col: str = 'commune_code',
-                     mechanical_col: str = 'mechanical_bikes',
-                     electric_col: str = 'electric_bikes',
+                     commune_code_col: str = 'code_insee_commune',
+                     mechanical_col: str = 'mechanical',
+                     electric_col: str = 'ebike',
                      is_installed_col: str = 'is_installed',
                      is_renting_col: str = 'is_renting',
                      is_returning_col: str = 'is_returning') -> Dict[str, int]:
@@ -104,8 +116,14 @@ class BikeStationLoader:
         """
         stations_dict = {}
         
-        # Extract unique stations
-        station_cols = [station_id_col, name_col, lat_col, lon_col, commune_code_col]
+        # Extract unique stations - only use columns that exist
+        station_cols = [station_id_col]
+        if name_col in df.columns:
+            station_cols.append(name_col)
+        if lat_col in df.columns:
+            station_cols.append(lat_col)
+        if lon_col in df.columns:
+            station_cols.append(lon_col)
         if capacity_col in df.columns:
             station_cols.append(capacity_col)
         if mechanical_col in df.columns:
@@ -119,45 +137,66 @@ class BikeStationLoader:
         if is_returning_col in df.columns:
             station_cols.append(is_returning_col)
         
+        # Filter to only existing columns
         available_cols = [col for col in station_cols if col in df.columns]
+        
+        if station_id_col not in available_cols:
+            logger.error(f"Station ID column '{station_id_col}' not found in DataFrame")
+            return stations_dict
+            
         station_data = df[available_cols].drop_duplicates(subset=[station_id_col])
         
         for _, row in station_data.iterrows():
-            station_id = str(row[station_id_col]).strip()
-            name = str(row[name_col]).strip() if pd.notna(row[name_col]) else 'Unknown'
+            station_id = str(row[station_id_col]).strip() if station_id_col in station_data.columns else None
+            if not station_id:
+                continue
+                
+            name = str(row[name_col]).strip() if name_col in station_data.columns and pd.notna(row[name_col]) else f'Station {station_id}'
             
             try:
-                latitude = float(row[lat_col]) if pd.notna(row[lat_col]) else None
-                longitude = float(row[lon_col]) if pd.notna(row[lon_col]) else None
+                latitude = float(row[lat_col]) if lat_col in station_data.columns and pd.notna(row[lat_col]) else None
+                longitude = float(row[lon_col]) if lon_col in station_data.columns and pd.notna(row[lon_col]) else None
+                
+                # Use default coordinates for Paris if missing
+                if not latitude or not longitude:
+                    latitude = 48.8566
+                    longitude = 2.3522
+                    logger.debug(f"Using default Paris coordinates for station {station_id}")
                 
                 # Get capacity
-                if capacity_col in df.columns and pd.notna(row.get(capacity_col)):
-                    capacity = int(row[capacity_col])
-                else:
-                    capacity = 28  # Default capacity
+                capacity = int(row[capacity_col]) if capacity_col in df.columns and pd.notna(row.get(capacity_col)) else 0
                 
                 # Get bike counts
                 mechanical = int(row[mechanical_col]) if mechanical_col in df.columns and pd.notna(row.get(mechanical_col)) else 0
                 electric = int(row[electric_col]) if electric_col in df.columns and pd.notna(row.get(electric_col)) else 0
                 
-                # Get operational status - handle yes/no strings
+                # Get operational status - handle yes/no strings and boolean values
                 is_installed = True
                 if is_installed_col in df.columns and pd.notna(row.get(is_installed_col)):
-                    val = str(row[is_installed_col]).upper()
-                    is_installed = val in ['OUI', 'YES', 'TRUE', '1', 'Y']
+                    val = row[is_installed_col]
+                    if isinstance(val, bool):
+                        is_installed = val
+                    else:
+                        is_installed = str(val).upper() in ['OUI', 'YES', 'TRUE', '1', 'Y']
                 
                 is_renting = True
                 if is_renting_col in df.columns and pd.notna(row.get(is_renting_col)):
-                    val = str(row[is_renting_col]).upper()
-                    is_renting = val in ['OUI', 'YES', 'TRUE', '1', 'Y']
+                    val = row[is_renting_col]
+                    if isinstance(val, bool):
+                        is_renting = val
+                    else:
+                        is_renting = str(val).upper() in ['OUI', 'YES', 'TRUE', '1', 'Y']
                 
                 is_returning = True
                 if is_returning_col in df.columns and pd.notna(row.get(is_returning_col)):
-                    val = str(row[is_returning_col]).upper()
-                    is_returning = val in ['OUI', 'YES', 'TRUE', '1', 'Y']
+                    val = row[is_returning_col]
+                    if isinstance(val, bool):
+                        is_returning = val
+                    else:
+                        is_returning = str(val).upper() in ['OUI', 'YES', 'TRUE', '1', 'Y']
                     
-            except (ValueError, TypeError):
-                logger.warning(f"Invalid numeric data for station {station_id}")
+            except (ValueError, TypeError) as e:
+                logger.warning(f"Invalid numeric data for station {station_id}: {e}")
                 continue
             
             if not latitude or not longitude:
@@ -165,39 +204,41 @@ class BikeStationLoader:
                 continue
             
             try:
-                commune_code = str(row[commune_code_col]).strip() if pd.notna(row[commune_code_col]) else None
-                commune_id = communes_dict.get(commune_code) if commune_code else None
+                commune_code = None
+                commune_id = None
+                
+                # Only try to get commune code if the column exists
+                if commune_code_col in df.columns:
+                    commune_code = str(row[commune_code_col]).strip() if pd.notna(row.get(commune_code_col)) else None
+                    commune_id = communes_dict.get(commune_code) if commune_code else None
                 
                 station, created = BikeStation.objects.get_or_create(
-                    station_id=station_id,
+                    stationcode=station_id,
                     defaults={
                         'name': name,
-                        'latitude': Decimal(str(latitude)),
-                        'longitude': Decimal(str(longitude)),
+                        'latitude': latitude,
+                        'longitude': longitude,
                         'capacity': capacity,
-                        'mechanical_bikes': mechanical,
-                        'electric_bikes': electric,
+                        'mechanical': mechanical,
+                        'ebike': electric,
                         'commune_id': commune_id,
                         'is_installed': is_installed,
                         'is_renting': is_renting,
                         'is_returning': is_returning,
-                        'activity_status': 'actif' if is_installed and is_renting else 'maintenance'
                     }
                 )
                 
                 # Update existing stations with latest data
                 if not created:
                     station.name = name
-                    station.latitude = Decimal(str(latitude))
-                    station.longitude = Decimal(str(longitude))
+                    station.latitude = latitude
+                    station.longitude = longitude
                     station.capacity = capacity
-                    station.mechanical_bikes = mechanical
-                    station.electric_bikes = electric
+                    station.mechanical = mechanical
+                    station.ebike = electric
                     station.is_installed = is_installed
                     station.is_renting = is_renting
                     station.is_returning = is_returning
-                    if not station.activity_status or station.activity_status == 'unknown':
-                        station.activity_status = 'actif' if is_installed and is_renting else 'maintenance'
                     station.save()
                 
                 stations_dict[station_id] = station.id
@@ -218,12 +259,12 @@ class StationStatusLoader:
     @staticmethod
     @transaction.atomic
     def load_statuses(df: pd.DataFrame, stations_dict: Dict[str, int],
-                     station_id_col: str = 'station_id',
-                     bikes_col: str = 'available_bikes',
-                     docks_col: str = 'available_docks',
-                     timestamp_col: str = 'timestamp',
-                     mechanical_col: str = 'available_mechanical',
-                     electric_col: str = 'available_electric',
+                     station_id_col: str = 'stationcode',
+                     bikes_col: str = 'numbikesavailable',
+                     docks_col: str = 'numdocksavailable',
+                     timestamp_col: str = 'duedate',
+                     mechanical_col: str = 'mechanical',
+                     electric_col: str = 'ebike',
                      is_installed_col: str = 'is_installed',
                      is_renting_col: str = 'is_renting',
                      is_returning_col: str = 'is_returning',
@@ -260,10 +301,10 @@ class StationStatusLoader:
                 continue
             
             try:
-                available_bikes = int(row[bikes_col]) if pd.notna(row[bikes_col]) else 0
-                available_docks = int(row[docks_col]) if pd.notna(row[docks_col]) else 0
-                available_mechanical = int(row[mechanical_col]) if mechanical_col in df.columns and pd.notna(row.get(mechanical_col)) else 0
-                available_electric = int(row[electric_col]) if electric_col in df.columns and pd.notna(row.get(electric_col)) else 0
+                numbikesavailable = int(row[bikes_col]) if pd.notna(row[bikes_col]) else 0
+                numdocksavailable = int(row[docks_col]) if pd.notna(row[docks_col]) else 0
+                mechanical = int(row[mechanical_col]) if mechanical_col in df.columns and pd.notna(row.get(mechanical_col)) else 0
+                ebike = int(row[electric_col]) if electric_col in df.columns and pd.notna(row.get(electric_col)) else 0
                 
                 # Parse timestamp - keep it simple
                 if pd.notna(row[timestamp_col]):
@@ -301,14 +342,9 @@ class StationStatusLoader:
                 
                 status = StationStatus(
                     station_id=stations_dict[station_id],
-                    available_bikes=available_bikes,
-                    available_docks=available_docks,
-                    available_mechanical=available_mechanical,
-                    available_electric=available_electric,
+                    available_bikes=numbikesavailable,
+                    available_docks=numdocksavailable,
                     timestamp=timestamp,
-                    is_installed=is_installed,
-                    is_renting=is_renting,
-                    is_returning=is_returning,
                     is_operational=is_installed and is_renting and is_returning
                 )
                 status_records.append(status)
@@ -353,7 +389,7 @@ class DailyAnalyticsLoader:
             stations_dict: Dictionary mapping station IDs to model IDs
             date_col: Column name for date
             station_id_col: Column name for station ID
-            commune_code_col: Column name for commune code
+            commune_code_col: Column name for commune code (optional if not in aggregated data)
             utilization_col: Column name for utilization rate
             batch_size: Batch size for bulk_create
             
@@ -363,6 +399,10 @@ class DailyAnalyticsLoader:
         analytics_records = []
         count = 0
         
+        # Check if commune_code column exists (it typically won't in aggregated data)
+        has_commune_col = commune_code_col in df.columns
+        has_utilization_col = utilization_col in df.columns
+        
         for _, row in df.iterrows():
             try:
                 date_val = pd.to_datetime(row[date_col]).date() if pd.notna(row[date_col]) else None
@@ -370,16 +410,20 @@ class DailyAnalyticsLoader:
                     continue
                 
                 station_id = str(row[station_id_col]).strip() if pd.notna(row[station_id_col]) else None
-                commune_code = str(row[commune_code_col]).strip() if pd.notna(row[commune_code_col]) else None
                 
                 station_pk = stations_dict.get(station_id) if station_id else None
-                commune_pk = communes_dict.get(commune_code) if commune_code else None
+                commune_pk = None
                 
-                # Must have at least station or commune
-                if not station_pk and not commune_pk:
+                # Try to get commune code if available in data
+                if has_commune_col:
+                    commune_code = str(row[commune_code_col]).strip() if pd.notna(row[commune_code_col]) else None
+                    commune_pk = communes_dict.get(commune_code) if commune_code else None
+                
+                # Must have at least station
+                if not station_pk:
                     continue
                 
-                avg_util = float(row[utilization_col]) if pd.notna(row[utilization_col]) else 0
+                avg_util = float(row[utilization_col]) if has_utilization_col and pd.notna(row[utilization_col]) else 0
                 
                 analytics = DailyAnalytics(
                     date=date_val,
@@ -433,7 +477,7 @@ class WeeklyAnalyticsLoader:
             stations_dict: Dictionary mapping station IDs to model IDs
             week_start_col: Column name for week start date
             station_id_col: Column name for station ID
-            commune_code_col: Column name for commune code
+            commune_code_col: Column name for commune code (optional if not in aggregated data)
             utilization_col: Column name for utilization rate
             batch_size: Batch size for bulk_create
             
@@ -442,6 +486,10 @@ class WeeklyAnalyticsLoader:
         """
         analytics_records = []
         count = 0
+        
+        # Check if commune_code column exists (it typically won't in aggregated data)
+        has_commune_col = commune_code_col in df.columns
+        has_utilization_col = utilization_col in df.columns
         
         for _, row in df.iterrows():
             try:
@@ -454,16 +502,20 @@ class WeeklyAnalyticsLoader:
                 week_end = week_start + timedelta(days=6)
                 
                 station_id = str(row[station_id_col]).strip() if pd.notna(row[station_id_col]) else None
-                commune_code = str(row[commune_code_col]).strip() if pd.notna(row[commune_code_col]) else None
                 
                 station_pk = stations_dict.get(station_id) if station_id else None
-                commune_pk = communes_dict.get(commune_code) if commune_code else None
+                commune_pk = None
                 
-                # Must have at least station or commune
-                if not station_pk and not commune_pk:
+                # Try to get commune code if available in data
+                if has_commune_col:
+                    commune_code = str(row[commune_code_col]).strip() if pd.notna(row[commune_code_col]) else None
+                    commune_pk = communes_dict.get(commune_code) if commune_code else None
+                
+                # Must have at least station
+                if not station_pk:
                     continue
                 
-                avg_util = float(row[utilization_col]) if pd.notna(row[utilization_col]) else 0
+                avg_util = float(row[utilization_col]) if has_utilization_col and pd.notna(row[utilization_col]) else 0
                 
                 analytics = WeeklyAnalytics(
                     week_start_date=week_start,
@@ -539,7 +591,11 @@ class DataLoader:
         
         try:
             # Load communes
-            communes_dict = self.commune_loader.load_communes(df_raw)
+            communes_dict = self.commune_loader.load_communes(
+                df_raw, 
+                code_col='code_insee_commune',
+                name_col='nom_arrondissement_communes'
+            )
             result['communes'] = len(communes_dict)
             
             # Load stations
@@ -552,13 +608,21 @@ class DataLoader:
             # Load daily analytics
             if 'daily' in transformed_data:
                 result['daily_analytics'] = self.daily_loader.load_daily_analytics(
-                    transformed_data['daily'], communes_dict, stations_dict
+                    transformed_data['daily'], 
+                    communes_dict, 
+                    stations_dict,
+                    station_id_col='stationcode',
+                    commune_code_col='code_insee_commune'  # May not exist in aggregated data
                 )
             
             # Load weekly analytics
             if 'weekly' in transformed_data:
                 result['weekly_analytics'] = self.weekly_loader.load_weekly_analytics(
-                    transformed_data['weekly'], communes_dict, stations_dict
+                    transformed_data['weekly'], 
+                    communes_dict, 
+                    stations_dict,
+                    station_id_col='stationcode',
+                    commune_code_col='code_insee_commune'  # May not exist in aggregated data
                 )
             
             logger.info(f"Data loading completed successfully: {result}")

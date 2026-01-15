@@ -11,7 +11,7 @@ class CommuneManager(models.Manager):
     
     def active_communes(self):
         """Get communes that have at least one active station"""
-        return self.filter(stations__is_active=True).distinct()
+        return self.filter(stations__is_installed=True).distinct()
 
 
 class BikeStationManager(models.Manager):
@@ -19,7 +19,7 @@ class BikeStationManager(models.Manager):
     
     def active_stations(self):
         """Get only active stations"""
-        return self.filter(is_active=True)
+        return self.filter(is_installed=True)
     
     def by_commune(self, commune_code):
         """Get stations by commune code"""
@@ -110,15 +110,23 @@ class BikeStation(models.Model):
         ('unknown', 'Unknown'),                  # Not yet classified
     ]
     
-    station_id = models.CharField(max_length=50, unique=True)
+    stationcode = models.IntegerField(unique=True)
     name = models.CharField(max_length=200)
+    is_installed = models.BooleanField(default=True)
+    capacity = models.IntegerField()
+    numdocksavailable = models.IntegerField(default=0)
+    numbikesavailable = models.IntegerField(default=0)
+    mechanical = models.IntegerField(default=0)
+    ebike = models.IntegerField(default=0)
+    is_renting = models.BooleanField(default=True)
+    is_returning = models.BooleanField(default=True)
+    duedate = models.DateTimeField(null=True, blank=True)
+    
     commune = models.ForeignKey(Commune, on_delete=models.CASCADE, related_name='stations', null=True, blank=True)
-    latitude = models.DecimalField(max_digits=9, decimal_places=6)
-    longitude = models.DecimalField(max_digits=9, decimal_places=6)
+    latitude = models.FloatField()
+    longitude = models.FloatField()
     # Coordinate storage as JSON string for geographic queries: {"type": "Point", "coordinates": [lon, lat]}
     coordinates = models.JSONField(null=True, blank=True, help_text="Geographic coordinates as GeoJSON Point")
-    total_docks = models.IntegerField()
-    is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -128,7 +136,7 @@ class BikeStation(models.Model):
     objects = BikeStationManager()
     
     class Meta:
-        ordering = ['station_id']
+        ordering = ['stationcode']
     
     def save(self, *args, **kwargs):
         """Automatically sync coordinates GeoJSON from latitude/longitude"""
@@ -140,7 +148,7 @@ class BikeStation(models.Model):
         super().save(*args, **kwargs)
     
     def __str__(self):
-        return f"{self.station_id} - {self.name}"
+        return f"{self.stationcode} - {self.name}"
 
 
 class StationStatus(models.Model):
@@ -161,7 +169,7 @@ class StationStatus(models.Model):
         ]
     
     def __str__(self):
-        return f"{self.station.station_id} - {self.timestamp}"
+        return f"{self.station.stationcode} - {self.timestamp}"
     
     @property
     def utilization_rate(self):
@@ -214,7 +222,7 @@ class DailyAnalytics(models.Model):
         if self.commune:
             return f"Analytics for {self.commune.code} on {self.date}"
         elif self.station:
-            return f"Analytics for {self.station.station_id} on {self.date}"
+            return f"Analytics for {self.station.stationcode} on {self.date}"
         return f"Analytics for {self.date}"
 
 
@@ -266,5 +274,5 @@ class WeeklyAnalytics(models.Model):
         if self.commune:
             return f"Weekly analytics for {self.commune.code} (Week {self.week_start_date} - {self.week_end_date})"
         elif self.station:
-            return f"Weekly analytics for {self.station.station_id} (Week {self.week_start_date} - {self.week_end_date})"
+            return f"Weekly analytics for {self.station.stationcode} (Week {self.week_start_date} - {self.week_end_date})"
         return f"Weekly analytics (Week {self.week_start_date} - {self.week_end_date})"

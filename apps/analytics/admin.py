@@ -10,9 +10,9 @@ class CommuneAdmin(admin.ModelAdmin):
 
 @admin.register(BikeStation)
 class BikeStationAdmin(admin.ModelAdmin):
-    list_display = ['station_id', 'name', 'commune', 'profile', 'total_docks', 'is_active']
-    list_filter = ['is_active', 'profile', 'commune']
-    search_fields = ['station_id', 'name']
+    list_display = ['stationcode', 'name', 'commune', 'profile', 'capacity', 'is_installed']
+    list_filter = ['is_installed', 'profile', 'commune']
+    search_fields = ['stationcode', 'name']
 
 
 @admin.register(StationStatus)
