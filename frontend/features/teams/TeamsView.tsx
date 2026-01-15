@@ -3,6 +3,8 @@ import { Github, Globe, Linkedin, Mail, Pencil, Save, X } from 'lucide-react';
 
 import type { AppPage } from '../../shared/types/navigation';
 import gretaLogo from '../../assets/images/Logo-Greta.png';
+import kirosImage from '../../assets/images/img/clients/kiros.JPG';
+import ruaImage from '../../assets/images/img/clients/rua.jpg';
 
 export interface TeamMember {
   id: string;
@@ -22,20 +24,21 @@ const defaultMembers: TeamMember[] = [
     id: 'kiros',
     name: 'Kiros',
     role: 'Data Scientist',
-    imageUrl: '/Data-Analysis-Dashboard/assets/img/hero/hero-5/velo1.png',
+    imageUrl: kirosImage,
     websiteUrl: 'https://www.kirosit.fr/portfolio',
   },
   {
     id: 'roua',
     name: 'Rabbeg Roua',
     role: 'Analyste Mobilité',
+    imageUrl: ruaImage,
     githubUrl: 'https://github.com/rabbegdev',
     linkedinUrl: 'https://www.linkedin.com/in/rabbeg-roua-120114259/',
   },
   {
     id: 'farial',
     name: 'Farial',
-    role: 'Développeur Full-Stack',
+    role: 'Professional Prompter',
     imageUrl: '/Data-Analysis-Dashboard/assets/img/farial.png',
   },
   {
