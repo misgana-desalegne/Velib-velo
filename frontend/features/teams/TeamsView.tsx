@@ -1,10 +1,12 @@
 import React, { useMemo, useState } from 'react';
-import { Github, Globe, Linkedin, Mail, Pencil, Save, X } from 'lucide-react';
+import { Github, Globe, Linkedin, Mail, Pencil, Trash2, Plus, Save, X, AlertCircle } from 'lucide-react';
 
 import type { AppPage } from '../../shared/types/navigation';
 import gretaLogo from '../../assets/images/Logo-Greta.png';
 import kirosImage from '../../assets/images/img/clients/kiros.JPG';
 import ruaImage from '../../assets/images/img/clients/rua.jpg';
+import farialImage from '../../assets/images/img/clients/Farial.png';
+import styles from './TeamsView.module.css';
 
 export interface TeamMember {
   id: string;
@@ -39,7 +41,7 @@ const defaultMembers: TeamMember[] = [
     id: 'farial',
     name: 'Farial',
     role: 'Professional Prompter',
-    imageUrl: '/Data-Analysis-Dashboard/assets/img/farial.png',
+    imageUrl: farialImage,
   },
   {
     id: 'greta',
@@ -98,6 +100,8 @@ export function TeamsView({
   const [members, setMembers] = useState<TeamMember[]>(() => loadMembers());
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<TeamMember | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [isAdding, setIsAdding] = useState(false);
 
   const activeMember = useMemo(
     () => (editingId ? members.find((m) => m.id === editingId) ?? null : null),
@@ -107,352 +111,424 @@ export function TeamsView({
   const startEdit = (member: TeamMember) => {
     setEditingId(member.id);
     setDraft({ ...member });
+    setIsAdding(false);
+  };
+
+  const startAdd = () => {
+    const newId = `member-${Date.now()}`;
+    const newMember: TeamMember = {
+      id: newId,
+      name: '',
+      role: '',
+    };
+    setDraft(newMember);
+    setEditingId(newId);
+    setIsAdding(true);
   };
 
   const cancelEdit = () => {
     setEditingId(null);
     setDraft(null);
+    setIsAdding(false);
   };
 
   const commitEdit = () => {
-    if (!draft) return;
-    const updated = members.map(m => (m.id === draft.id ? { ...draft } : m));
-    setMembers(updated);
-    saveMembers(updated);
+    if (!draft || !draft.name?.trim()) return;
+
+    if (isAdding) {
+      // Add new member
+      const newMembers = [...members, draft];
+      setMembers(newMembers);
+      saveMembers(newMembers);
+    } else {
+      // Update existing member
+      const updated = members.map(m => (m.id === draft.id ? { ...draft } : m));
+      setMembers(updated);
+      saveMembers(updated);
+    }
+
     cancelEdit();
   };
 
-  return (
-    <div className="w-full bg-gradient-to-b from-slate-50 via-white to-slate-50">
-      <div className="mx-auto w-full max-w-6xl px-6 py-10">
-        <div className="mb-8 grid gap-6 lg:grid-cols-12 lg:items-end">
-          <div className="lg:col-span-8">
-            <div className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-sm font-medium text-blue-700">
-              <span className="h-2 w-2 rounded-full bg-blue-600" />
-              ParisCycle • Équipe
-            </div>
-            <h1 className="mt-4 text-3xl font-semibold tracking-tight text-gray-900 sm:text-4xl">
-              L’équipe derrière les analyses
-            </h1>
-            <p className="mt-3 max-w-2xl text-base text-gray-600">
-              Découvrez les profils, contacts et liens. En mode connecté, vous pouvez mettre à jour les informations.
-            </p>
-          </div>
+  const handleDelete = (id: string) => {
+    const updated = members.filter(m => m.id !== id);
+    setMembers(updated);
+    saveMembers(updated);
+    setDeleteConfirm(null);
+  };
 
-          <div className="lg:col-span-4 lg:justify-self-end">
-            {isAuthenticated ? (
-              <div className="flex items-center gap-3 rounded-2xl bg-white px-4 py-3 shadow-sm ring-1 ring-gray-200">
-                <div className="h-2 w-2 rounded-full bg-green-500" />
-                <div className="text-sm">
-                  <div className="font-medium text-gray-900">Mode édition</div>
-                  <div className="text-gray-600">Sauvegarde locale</div>
-                </div>
-              </div>
-            ) : (
-              <div className="flex items-center gap-3 rounded-2xl bg-white px-4 py-3 shadow-sm ring-1 ring-gray-200">
-                <div className="h-2 w-2 rounded-full bg-gray-400" />
-                <div className="text-sm">
-                  <div className="font-medium text-gray-900">Lecture seule</div>
-                  <div className="text-gray-600">Connexion requise pour éditer</div>
-                </div>
-              </div>
-            )}
+  return (
+    <div className={styles.container}>
+      {/* Header Section */}
+      <div className={styles.headerSection}>
+        <div className={styles.headerContent}>
+          <div className={styles.headerBadge}>
+            <div className={styles.badgeDot} />
+            <span>ParisCycle • Équipe</span>
           </div>
+          <h1 className={styles.headerTitle}>L'équipe qui pilote les analyses</h1>
+          <p className={styles.headerDescription}>
+            Experts en mobilité urbaine et analyse de données. Nous transformons les données de Vélib' en insights 
+            actionnables pour une meilleure compréhension de la mobilité parisienne.
+          </p>
         </div>
 
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {members.map((member) => {
-            const githubUrl = normalizeUrl(member.githubUrl);
-            const linkedinUrl = normalizeUrl(member.linkedinUrl);
-            const websiteUrl = normalizeUrl(member.websiteUrl);
-            const mailUrl = member.email ? `mailto:${member.email}` : undefined;
+        {isAuthenticated && (
+          <button
+            onClick={startAdd}
+            className={styles.addButton}
+            title="Ajouter un membre"
+          >
+            <Plus className={styles.addButtonIcon} />
+            <span>Ajouter un membre</span>
+          </button>
+        )}
+      </div>
 
-            return (
-              <div
-                key={member.id}
-                className="group relative overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-gray-200 transition hover:-translate-y-0.5 hover:shadow-md"
-              >
-                <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-blue-600 via-sky-500 to-red-500 opacity-70" />
+      {/* Team Grid */}
+      <div className={styles.gridContainer}>
+        {members.map((member) => {
+          const githubUrl = normalizeUrl(member.githubUrl);
+          const linkedinUrl = normalizeUrl(member.linkedinUrl);
+          const websiteUrl = normalizeUrl(member.websiteUrl);
+          const mailUrl = member.email ? `mailto:${member.email}` : undefined;
 
-                <div className="p-6">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex items-center gap-4">
-                      {member.imageUrl ? (
-                        <img
-                          src={member.imageUrl}
-                          alt={member.name}
-                          className="h-20 w-20 rounded-full object-cover ring-2 ring-gray-200 flex-shrink-0"
-                        />
-                      ) : (
-                        <div className="flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-blue-100 to-sky-100 text-lg font-bold text-gray-700 ring-2 ring-gray-200 flex-shrink-0">
-                          {initials(member.name)}
-                        </div>
-                      )}
+          return (
+            <div key={member.id} className={styles.teamCard}>
+              {/* Gradient Bar */}
+              <div className={styles.cardGradientBar} />
 
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <h2 className="truncate text-lg font-semibold text-gray-900">{member.name}</h2>
-                          {member.id === 'farial' && onNavigate && (
-                            <button
-                              type="button"
-                              className="rounded-full bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100"
-                              onClick={() => onNavigate('farial')}
-                              title="Ouvrir le profil détaillé"
-                            >
-                              Voir profil
-                            </button>
-                          )}
-                        </div>
-                        {member.role ? (
-                          <p className="mt-1 text-sm text-gray-600">{member.role}</p>
-                        ) : (
-                          <p className="mt-1 text-sm text-gray-500">Rôle à définir</p>
-                        )}
-                      </div>
+              {/* Content */}
+              <div className={styles.cardContent}>
+                {/* Avatar Section */}
+                <div className={styles.avatarWrapper}>
+                  {member.imageUrl ? (
+                    <img
+                      src={member.imageUrl}
+                      alt={member.name}
+                      className={styles.avatar}
+                    />
+                  ) : (
+                    <div className={styles.avatarPlaceholder}>
+                      {initials(member.name)}
                     </div>
+                  )}
+                </div>
 
-                    {isAuthenticated && (
+                {/* Info Section */}
+                <div className={styles.infoSection}>
+                  <div className={styles.nameRow}>
+                    <h2 className={styles.memberName}>{member.name}</h2>
+                    {member.id === 'farial' && onNavigate && (
                       <button
                         type="button"
-                        className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-900 shadow-sm transition hover:bg-gray-50"
-                        onClick={() => startEdit(member)}
-                        title="Modifier"
+                        className={styles.profileButton}
+                        onClick={() => onNavigate('farial')}
+                        title="Ouvrir le profil détaillé"
                       >
-                        <Pencil className="h-4 w-4" />
-                        Éditer
+                        Profil
                       </button>
                     )}
                   </div>
 
-                  <div className="mt-5 flex flex-wrap gap-2">
-                    {githubUrl && (
-                      <a
-                        href={githubUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                        title="GitHub"
-                      >
-                        <Github className="h-4 w-4" />
-                        GitHub
-                      </a>
-                    )}
-                    {linkedinUrl && (
-                      <a
-                        href={linkedinUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                        title="LinkedIn"
-                      >
-                        <Linkedin className="h-4 w-4" />
-                        LinkedIn
-                      </a>
-                    )}
-                    {websiteUrl && (
-                      <a
-                        href={websiteUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                        title="Site web"
-                      >
-                        <Globe className="h-4 w-4" />
-                        Site
-                      </a>
-                    )}
-                    {mailUrl && (
-                      <a
-                        href={mailUrl}
-                        className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                        title="Email"
-                      >
-                        <Mail className="h-4 w-4" />
-                        Email
-                      </a>
-                    )}
+                  {member.role ? (
+                    <p className={styles.memberRole}>{member.role}</p>
+                  ) : (
+                    <p className={styles.memberRoleEmpty}>Rôle à définir</p>
+                  )}
+                </div>
+
+                {/* Actions */}
+                {isAuthenticated && (
+                  <div className={styles.cardActions}>
+                    <button
+                      type="button"
+                      className={styles.editButton}
+                      onClick={() => startEdit(member)}
+                      title="Modifier"
+                    >
+                      <Pencil className={styles.editIcon} />
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.deleteButton}
+                      onClick={() => setDeleteConfirm(member.id)}
+                      title="Supprimer"
+                    >
+                      <Trash2 className={styles.deleteIcon} />
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Social Links */}
+              <div className={styles.socialLinks}>
+                {githubUrl && (
+                  <a
+                    href={githubUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className={styles.socialLink}
+                    title="GitHub"
+                  >
+                    <Github className={styles.socialIcon} />
+                  </a>
+                )}
+                {linkedinUrl && (
+                  <a
+                    href={linkedinUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className={styles.socialLink}
+                    title="LinkedIn"
+                  >
+                    <Linkedin className={styles.socialIcon} />
+                  </a>
+                )}
+                {websiteUrl && (
+                  <a
+                    href={websiteUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className={styles.socialLink}
+                    title="Site web"
+                  >
+                    <Globe className={styles.socialIcon} />
+                  </a>
+                )}
+                {mailUrl && (
+                  <a
+                    href={mailUrl}
+                    className={styles.socialLink}
+                    title="Email"
+                  >
+                    <Mail className={styles.socialIcon} />
+                  </a>
+                )}
+              </div>
+
+              {/* Delete Confirmation */}
+              {deleteConfirm === member.id && isAuthenticated && (
+                <div className={styles.deleteConfirmation}>
+                  <AlertCircle className={styles.confirmIcon} />
+                  <div>
+                    <p className={styles.confirmText}>Supprimer ce membre ?</p>
+                    <p className={styles.confirmSubtext}>{member.name}</p>
+                  </div>
+                  <div className={styles.confirmActions}>
+                    <button
+                      onClick={() => setDeleteConfirm(null)}
+                      className={styles.confirmCancel}
+                    >
+                      Annuler
+                    </button>
+                    <button
+                      onClick={() => handleDelete(member.id)}
+                      className={styles.confirmDelete}
+                    >
+                      Supprimer
+                    </button>
                   </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {isAuthenticated && (
-          <div className="mt-6 text-xs text-gray-500">
-            Les modifications sont sauvegardées dans votre navigateur (localStorage).
-          </div>
-        )}
+              )}
+            </div>
+          );
+        })}
       </div>
 
-      {isAuthenticated && editingId && draft && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div
-            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-            onClick={cancelEdit}
-            aria-hidden="true"
-          />
+      {/* Info Footer */}
+      {isAuthenticated && (
+        <div className={styles.infoFooter}>
+          <p>Les modifications sont sauvegardées automatiquement dans votre navigateur (localStorage).</p>
+        </div>
+      )}
 
+      {/* Edit Modal */}
+      {isAuthenticated && editingId && draft && (
+        <div className={styles.modalOverlay} onClick={cancelEdit}>
           <div
+            className={styles.modalDialog}
+            onClick={(e) => e.stopPropagation()}
             role="dialog"
             aria-modal="true"
-            className="relative w-full max-w-2xl overflow-hidden rounded-3xl bg-white shadow-xl ring-1 ring-gray-200"
           >
-            <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
+            {/* Modal Header */}
+            <div className={styles.modalHeader}>
               <div>
-                <div className="text-sm font-medium text-gray-500">Édition profil</div>
-                <div className="text-lg font-semibold text-gray-900">{activeMember?.name ?? draft.name}</div>
+                <p className={styles.modalLabel}>
+                  {isAdding ? 'Ajouter un nouveau membre' : 'Éditer le profil'}
+                </p>
+                <h2 className={styles.modalTitle}>
+                  {isAdding ? 'Nouveau membre' : draft.name}
+                </h2>
               </div>
               <button
                 type="button"
-                className="rounded-xl p-2 text-gray-600 hover:bg-gray-100"
+                className={styles.modalCloseButton}
                 onClick={cancelEdit}
                 title="Fermer"
               >
-                <X className="h-5 w-5" />
+                <X className={styles.modalCloseIcon} />
               </button>
             </div>
 
-            <div className="grid gap-4 px-6 py-5 sm:grid-cols-2">
-              <label className="grid gap-1 text-sm">
-                <span className="font-medium text-gray-700">Nom</span>
-                <input
-                  className="rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                  value={draft.name}
-                  onChange={(e) => setDraft((d) => (d ? { ...d, name: e.target.value } : d))}
-                  placeholder="Nom"
-                />
-              </label>
+            {/* Modal Form */}
+            <div className={styles.modalForm}>
+              {/* Row 1: Name and Role */}
+              <div className={styles.formRow}>
+                <label className={styles.formGroup}>
+                  <span className={styles.formLabel}>Nom *</span>
+                  <input
+                    type="text"
+                    className={styles.formInput}
+                    value={draft.name}
+                    onChange={(e) => setDraft((d) => (d ? { ...d, name: e.target.value } : d))}
+                    placeholder="Nom complet"
+                    autoFocus
+                  />
+                </label>
 
-              <label className="grid gap-1 text-sm">
-                <span className="font-medium text-gray-700">Rôle</span>
-                <input
-                  className="rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                  value={draft.role ?? ''}
-                  onChange={(e) => setDraft((d) => (d ? { ...d, role: e.target.value } : d))}
-                  placeholder="Ex: Data Scientist"
-                />
-              </label>
+                <label className={styles.formGroup}>
+                  <span className={styles.formLabel}>Rôle</span>
+                  <input
+                    type="text"
+                    className={styles.formInput}
+                    value={draft.role ?? ''}
+                    onChange={(e) => setDraft((d) => (d ? { ...d, role: e.target.value } : d))}
+                    placeholder="Ex: Data Scientist"
+                  />
+                </label>
+              </div>
 
-              <label className="grid gap-1 text-sm sm:col-span-2">
-                <span className="font-medium text-gray-700">Image URL</span>
-                <input
-                  className="rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                  value={draft.imageUrl ?? ''}
-                  onChange={(e) => setDraft((d) => (d ? { ...d, imageUrl: e.target.value } : d))}
-                  placeholder="https://..."
-                />
-                <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <label className="inline-flex cursor-pointer items-center gap-2 text-sm font-medium text-blue-700 hover:text-blue-800">
+              {/* Row 2: Image URL */}
+              <label className={styles.formGroup}>
+                <span className={styles.formLabel}>Image</span>
+                <div className={styles.imageInputContainer}>
+                  <input
+                    type="text"
+                    className={styles.formInput}
+                    value={draft.imageUrl ?? ''}
+                    onChange={(e) => setDraft((d) => (d ? { ...d, imageUrl: e.target.value } : d))}
+                    placeholder="https://..."
+                  />
+                  <label className={styles.imageUploadButton}>
                     <input
                       type="file"
                       accept="image/*"
-                      className="hidden"
+                      className={styles.fileInput}
                       onChange={async (e) => {
                         const file = e.currentTarget.files?.[0];
                         e.currentTarget.value = '';
                         if (!file) return;
-
                         try {
                           const dataUrl = await fileToDataUrl(file);
                           setDraft((d) => (d ? { ...d, imageUrl: dataUrl } : d));
                         } catch {
-                          // Ignore and keep current imageUrl
+                          // Ignore error
                         }
                       }}
                     />
-                    <span className="inline-flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-gray-900">
-                      <span className="text-blue-700">Importer une image</span>
-                      <span className="text-xs font-normal text-gray-600">(PNG/JPG/WebP)</span>
-                    </span>
+                    <span>Importer</span>
                   </label>
-
-                  <button
-                    type="button"
-                    className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-medium text-gray-900 hover:bg-gray-50"
-                    onClick={() => setDraft((d) => (d ? { ...d, imageUrl: undefined } : d))}
-                    disabled={!draft.imageUrl}
-                    title={!draft.imageUrl ? 'Aucune image à supprimer' : 'Supprimer l\'image'}
-                  >
-                    Supprimer l'image
-                  </button>
                 </div>
 
+                {/* Image Preview */}
                 {draft.imageUrl && (
-                  <div className="mt-3 flex items-center gap-3 rounded-2xl bg-slate-50 p-3 ring-1 ring-gray-200">
+                  <div className={styles.imagePreview}>
                     <img
                       src={draft.imageUrl}
                       alt="Aperçu"
-                      className="h-14 w-14 rounded-2xl object-cover ring-1 ring-gray-200"
+                      className={styles.previewImage}
                     />
-                    <div className="min-w-0">
-                      <div className="text-sm font-medium text-gray-900">Aperçu</div>
-                      <div className="truncate text-xs text-gray-600">
-                        {draft.imageUrl.startsWith('data:') ? 'Image importée (stockée localement)' : draft.imageUrl}
-                      </div>
+                    <div>
+                      <p className={styles.previewTitle}>Aperçu</p>
+                      <p className={styles.previewUrl}>
+                        {draft.imageUrl.startsWith('data:')
+                          ? 'Image importée (stockée localement)'
+                          : draft.imageUrl}
+                      </p>
                     </div>
+                    <button
+                      type="button"
+                      className={styles.clearImageButton}
+                      onClick={() => setDraft((d) => (d ? { ...d, imageUrl: undefined } : d))}
+                      title="Supprimer l'image"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
                   </div>
                 )}
               </label>
 
-              <label className="grid gap-1 text-sm">
-                <span className="font-medium text-gray-700">GitHub</span>
-                <input
-                  className="rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                  value={draft.githubUrl ?? ''}
-                  onChange={(e) => setDraft((d) => (d ? { ...d, githubUrl: e.target.value } : d))}
-                  placeholder="https://github.com/..."
-                />
-              </label>
+              {/* Row 3: Links */}
+              <div className={styles.formRow}>
+                <label className={styles.formGroup}>
+                  <span className={styles.formLabel}>GitHub</span>
+                  <input
+                    type="text"
+                    className={styles.formInput}
+                    value={draft.githubUrl ?? ''}
+                    onChange={(e) => setDraft((d) => (d ? { ...d, githubUrl: e.target.value } : d))}
+                    placeholder="https://github.com/..."
+                  />
+                </label>
 
-              <label className="grid gap-1 text-sm">
-                <span className="font-medium text-gray-700">LinkedIn</span>
-                <input
-                  className="rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                  value={draft.linkedinUrl ?? ''}
-                  onChange={(e) => setDraft((d) => (d ? { ...d, linkedinUrl: e.target.value } : d))}
-                  placeholder="https://linkedin.com/in/..."
-                />
-              </label>
+                <label className={styles.formGroup}>
+                  <span className={styles.formLabel}>LinkedIn</span>
+                  <input
+                    type="text"
+                    className={styles.formInput}
+                    value={draft.linkedinUrl ?? ''}
+                    onChange={(e) => setDraft((d) => (d ? { ...d, linkedinUrl: e.target.value } : d))}
+                    placeholder="https://linkedin.com/in/..."
+                  />
+                </label>
+              </div>
 
-              <label className="grid gap-1 text-sm">
-                <span className="font-medium text-gray-700">Email</span>
-                <input
-                  className="rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                  value={draft.email ?? ''}
-                  onChange={(e) => setDraft((d) => (d ? { ...d, email: e.target.value } : d))}
-                  placeholder="nom@domaine.com"
-                />
-              </label>
+              {/* Row 4: Site and Email */}
+              <div className={styles.formRow}>
+                <label className={styles.formGroup}>
+                  <span className={styles.formLabel}>Site web</span>
+                  <input
+                    type="text"
+                    className={styles.formInput}
+                    value={draft.websiteUrl ?? ''}
+                    onChange={(e) => setDraft((d) => (d ? { ...d, websiteUrl: e.target.value } : d))}
+                    placeholder="https://..."
+                  />
+                </label>
 
-              <label className="grid gap-1 text-sm">
-                <span className="font-medium text-gray-700">Site web</span>
-                <input
-                  className="rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                  value={draft.websiteUrl ?? ''}
-                  onChange={(e) => setDraft((d) => (d ? { ...d, websiteUrl: e.target.value } : d))}
-                  placeholder="https://..."
-                />
-              </label>
+                <label className={styles.formGroup}>
+                  <span className={styles.formLabel}>Email</span>
+                  <input
+                    type="email"
+                    className={styles.formInput}
+                    value={draft.email ?? ''}
+                    onChange={(e) => setDraft((d) => (d ? { ...d, email: e.target.value } : d))}
+                    placeholder="nom@domaine.com"
+                  />
+                </label>
+              </div>
             </div>
 
-            <div className="flex flex-col-reverse gap-3 border-t border-gray-100 px-6 py-4 sm:flex-row sm:items-center sm:justify-end">
+            {/* Modal Footer */}
+            <div className={styles.modalFooter}>
               <button
                 type="button"
-                className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-900 hover:bg-gray-50"
+                className={styles.cancelButton}
                 onClick={cancelEdit}
               >
                 Annuler
               </button>
               <button
                 type="button"
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                className={styles.saveButton}
                 onClick={commitEdit}
                 disabled={!draft?.name?.trim()}
                 title={!draft?.name?.trim() ? 'Le nom est requis' : 'Enregistrer'}
               >
-                <Save className="h-4 w-4" />
-                Enregistrer
+                <Save className={styles.saveIcon} />
+                <span>Enregistrer</span>
               </button>
             </div>
           </div>
