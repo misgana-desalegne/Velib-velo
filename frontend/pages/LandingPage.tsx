@@ -2,9 +2,12 @@ import React from 'react';
 import { VeloHeader } from '../shared/components/Header';
 import { useLandingStyles } from '../shared/hooks/useLandingStyles';
 import styles from './LandingPage.module.css';
+import partnerLogo from '../assets/images/Logo-Greta.png';
+// import farialImg from '../assets/images/img/farial.png';
+import type { AppPage } from '../shared/types/navigation';
 
 interface VeloLandingPageProps {
-  onNavigate: (page: 'landing' | 'login' | 'register' | 'dashboard') => void;
+  onNavigate: (page: AppPage) => void;
 }
 
 export const VeloLandingPage: React.FC<VeloLandingPageProps> = ({ onNavigate }) => {
@@ -15,22 +18,13 @@ export const VeloLandingPage: React.FC<VeloLandingPageProps> = ({ onNavigate }) 
   const heroImageUrl = '/Data-Analysis-Dashboard/assets/img/hero/hero-5/velo1.png';
 
   const teamMembers = [
-    { name: 'Sophie Moreau', role: 'Data Scientist', image: heroImageUrl },
-    { name: 'Antoine Dubois', role: 'Développeur Full-Stack', image: '/Data-Analysis-Dashboard/assets/img/hero/hero-5/hero-img.svg' },
-    { name: 'Claire Martin', role: 'Analyste Mobilité', image: '/Data-Analysis-Dashboard/assets/img/hero/hero-5/hero-bg.svg' },
+    { name: 'Kiros Misgana', role: 'Data Scientist', image: heroImageUrl, link: 'https://www.kirosit.fr/portfolio' },
+    { name: 'Farial Huda', role: 'Développeur Full-Stack', image: '/Data-Analysis-Dashboard/assets/img/farial.png' },
+    { name: 'Rabbeg Roua', role: 'Analyste Mobilité', image: '/Data-Analysis-Dashboard/assets/img/hero/hero-5/hero-bg.svg' },
   ];
 
   return (
     <div className={styles.container}>
-      {/* Background Image Layer - Zoomed and positioned */}
-      <div 
-        className={styles.backgroundImage}
-        style={{ backgroundImage: `url(${heroImageUrl})` }}
-      />
-
-      {/* Modern gradient overlay */}
-      <div className={styles.gradientOverlay} />
-
       {/* Header */}
       <div className={styles.header}>
         <VeloHeader onNavigate={onNavigate} isAuthenticated={false} onLogout={() => {}} />
@@ -39,19 +33,10 @@ export const VeloLandingPage: React.FC<VeloLandingPageProps> = ({ onNavigate }) 
       {/* Main Content */}
       <div className={styles.mainContent}>
         <div className={styles.contentWrapper}>
-          {/* Modern badge */}
-          <div className={styles.badge}>
-            <span className={styles.badgeText}>
-              🚴 Mobilité Urbaine Intelligente
-            </span>
-          </div>
-
-          <h1 className={styles.title}>
-            ParisCycle
-            <br />
-            <span className={styles.titleAccent}>
-              Analytics
-            </span>
+          <h1 className={styles.title} style={{ background: 'none', WebkitTextFillColor: 'initial' }}>
+            <span style={{ color: '#2f80ed' }}>Paris</span>
+            <span style={{ color: '#FFFFFF' }}>Cycle</span>
+            <span style={{ color: '#EF4135' }}> Analytics</span>
           </h1>
 
           <p className={styles.description}>
@@ -75,6 +60,14 @@ export const VeloLandingPage: React.FC<VeloLandingPageProps> = ({ onNavigate }) 
             >
               Inscription
             </button>
+
+            {/* Public realtime stats */}
+            <button
+              onClick={() => onNavigate('velib')}
+              className={styles.buttonSecondary}
+            >
+              Statistiques Vélib (Live)
+            </button>
           </div>
         </div>
       </div>
@@ -95,7 +88,19 @@ export const VeloLandingPage: React.FC<VeloLandingPageProps> = ({ onNavigate }) 
           {/* Team Grid */}
           <div className={styles.teamGrid}>
             {teamMembers.map((member, index) => (
-              <div key={index} className={styles.teamCard}>
+              <div 
+                key={index} 
+                className={styles.teamCard}
+                onClick={() => {
+                  if (member.name === 'Farial Huda') {
+                    onNavigate('farial');
+                  } else if (member.link) {
+                    window.open(member.link, '_blank');
+                  }
+                }}
+                style={{ cursor: (member.link || member.name === 'Farial Huda') ? 'pointer' : 'default' }}
+                title={member.link || member.name === 'Farial Huda' ? `Voir le profil de ${member.name}` : ''}
+              >
                 {/* Avatar */}
                 <div className={styles.avatarWrapper}>
                   <div
@@ -124,9 +129,18 @@ export const VeloLandingPage: React.FC<VeloLandingPageProps> = ({ onNavigate }) 
             </p>
             <div className={styles.logoContainer}>
               <img
-                src="/Data-Analysis-Dashboard/assets/img/logo/logo.svg"
-                alt="Organisation Logo"
+                src={partnerLogo}
+                alt="Partenaire - Greta Nord-Isère"
                 className={styles.logo}
+                style={{ 
+                  maxWidth: '250px', 
+                  height: 'auto', 
+                  filter: 'none', 
+                  opacity: 1,
+                  backgroundColor: 'white', /* Adding white bg just in case it's transparent text */
+                  padding: '10px',
+                  borderRadius: '8px'
+                }}
               />
             </div>
           </div>

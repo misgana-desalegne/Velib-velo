@@ -1,16 +1,23 @@
 import { useState, lazy, Suspense, memo } from 'react';
 import { Header } from './shared/components/Header';
 import { VeloLandingPage } from './pages/LandingPage';
+import { FarialPage } from './pages/FarialPage';
+import { VelibRealtimePage } from './pages/VelibRealtimePage';
+import { TeamsPage } from './pages/TeamsPage';
 import { VeloLogin } from './features/auth/Login';
 import { VeloSignup } from './features/auth/Signup';
 import { VeloPreloader } from './shared/components/Preloader';
+import { BackgroundShell } from './shared/components/BackgroundShell';
 import { authAPI } from './api/auth';
+import type { AppPage } from './shared/types/navigation';
 
 // Lazy load dashboard components for better performance
 const LiveDashboard = lazy(() => import('./features/dashboard/LiveDashboard').then(m => ({ default: m.LiveDashboard })));
 const StationBehavior = lazy(() => import('./features/dashboard/StationBehavior').then(m => ({ default: m.StationBehavior })));
 const ArrondissementAnalysis = lazy(() => import('./features/dashboard/ArrondissementAnalysis').then(m => ({ default: m.ArrondissementAnalysis })));
 const MapAnalysis = lazy(() => import('./features/dashboard/MapAnalysis').then(m => ({ default: m.MapAnalysis })));
+const VelibRealtimeStats = lazy(() => import('./features/dashboard/VelibRealtimeStats').then(m => ({ default: m.VelibRealtimeStats })));
+const TeamsView = lazy(() => import('./features/teams/TeamsView').then(m => ({ default: m.TeamsView })));
 
 // Loading fallback component
 const LoadingFallback = memo(() => (
@@ -28,7 +35,7 @@ export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
     return localStorage.getItem('isAuthenticated') === 'true';
   });
-  const [currentPage, setCurrentPage] = useState<'landing' | 'login' | 'register' | 'dashboard'>('landing');
+  const [currentPage, setCurrentPage] = useState<AppPage>('landing');
   const [activeView, setActiveView] = useState('live');
 
   const handleLogin = () => {
@@ -63,27 +70,49 @@ export default function App() {
     }
   };
 
-  // Render landing, login, or register pages
+  let content: JSX.Element;
+
+  // Unauthenticated pages
   if (!isAuthenticated) {
     if (currentPage === 'login') {
-      return (
+      content = (
         <Suspense fallback={<VeloPreloader />}>
           <VeloLogin onNavigate={setCurrentPage} onLogin={handleLogin} />
         </Suspense>
       );
-    }
-    if (currentPage === 'register') {
-      return (
+    } else if (currentPage === 'register') {
+      content = (
         <Suspense fallback={<VeloPreloader />}>
           <VeloSignup onNavigate={setCurrentPage} onRegister={handleRegister} />
         </Suspense>
       );
+    } else if (currentPage === 'farial') {
+      content = (
+        <Suspense fallback={<VeloPreloader />}>
+          <FarialPage onNavigate={setCurrentPage} />
+        </Suspense>
+      );
+    } else if (currentPage === 'velib') {
+      content = (
+        <Suspense fallback={<VeloPreloader />}>
+          <VelibRealtimePage onNavigate={setCurrentPage} />
+        </Suspense>
+      );
+    } else if (currentPage === 'teams') {
+      content = (
+        <Suspense fallback={<VeloPreloader />}>
+          <TeamsPage isAuthenticated={isAuthenticated} onNavigate={setCurrentPage} />
+        </Suspense>
+      );
+    } else {
+      content = (
+        <Suspense fallback={<VeloPreloader />}>
+          <VeloLandingPage onNavigate={setCurrentPage} />
+        </Suspense>
+      );
     }
-    return (
-      <Suspense fallback={<VeloPreloader />}>
-        <VeloLandingPage onNavigate={setCurrentPage} />
-      </Suspense>
-    );
+
+    return <BackgroundShell>{content}</BackgroundShell>;
   }
 
   // Render dashboard after authentication
@@ -97,13 +126,17 @@ export default function App() {
         return <ArrondissementAnalysis />;
       case 'map':
         return <MapAnalysis />;
+      case 'velib':
+        return <VelibRealtimeStats />;
+      case 'teams':
+        return <TeamsView />;
       default:
         return <LiveDashboard />;
     }
   };
 
-  return (
-    <div className="flex flex-col h-screen bg-gray-50">
+  content = (
+    <div className="flex flex-col h-screen bg-transparent">
       <Header variant="dashboard" activeView={activeView} onViewChange={setActiveView} onLogout={handleLogout} />
       <main className="flex-1 overflow-auto">
         <Suspense fallback={<LoadingFallback />}>
@@ -112,4 +145,6 @@ export default function App() {
       </main>
     </div>
   );
+
+  return <BackgroundShell>{content}</BackgroundShell>;
 }

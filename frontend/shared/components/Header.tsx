@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Activity, TrendingUp, Building2, Map, Bike, LogOut, Menu, X } from 'lucide-react';
+import { Activity, TrendingUp, Building2, Map, Bike, LogOut, Menu, X, Users } from 'lucide-react';
 import { Button } from '../ui/button';
+import logo from '@/assets/images/img/logo/LOGO velo.png';
+import type { AppPage } from '../types/navigation';
 
 // Dashboard Header Props
 interface DashboardHeaderProps {
@@ -13,7 +15,7 @@ interface DashboardHeaderProps {
 // Landing/Auth Header Props
 interface LandingHeaderProps {
   variant: 'landing';
-  onNavigate: (page: 'landing' | 'login' | 'register' | 'dashboard') => void;
+  onNavigate: (page: AppPage) => void;
   isAuthenticated: boolean;
   onLogout: () => void;
 }
@@ -40,6 +42,8 @@ export function Header(props: HeaderProps) {
       { id: 'behavior', label: 'Comportement des Stations', icon: TrendingUp },
       { id: 'arrondissement', label: 'Par Arrondissement', icon: Building2 },
       { id: 'map', label: 'Vue Cartographique', icon: Map },
+      { id: 'velib', label: 'Vélib Temps Réel', icon: Bike },
+      { id: 'teams', label: 'Équipe', icon: Users },
     ];
 
     return (
@@ -47,11 +51,7 @@ export function Header(props: HeaderProps) {
         <div className="flex items-center justify-between px-4 py-2">
           {/* Logo and Title */}
           <div className="flex items-center gap-2">
-            <Bike className="w-6 h-6" style={{color: '#2F80ED'}} />
-            <div>
-              <h1 className="text-lg font-bold" style={{color: '#2F80ED'}}>ParisCycle</h1>
-              <p className="text-xs text-gray-500 hidden sm:block">Tableau de Bord d'Analyse</p>
-            </div>
+            <img src={logo} alt="ParisCycle - Innovative Urban Mobility Logo" style={{ height: '40px', width: 'auto' }} />
           </div>
 
           {/* Navigation Menu */}
@@ -141,22 +141,15 @@ export function Header(props: HeaderProps) {
               padding: 0
             }}
           >
-            <Bike style={{ width: '32px', height: '32px', color: '#2F80ED' }} />
-            <span style={{
-              fontSize: '1.5rem',
-              fontWeight: '700',
-              color: '#2F80ED',
-              letterSpacing: '-0.5px'
-            }}>
-              ParisCycle
-            </span>
+            <img src={logo} alt="ParisCycle - Innovative Urban Mobility Logo" style={{ height: '50px', width: 'auto' }} />
           </button>
           
           {/* Desktop Navigation */}
           <nav style={{
             display: 'flex',
+            gap: '15px',
             alignItems: 'center',
-            gap: '30px'
+            padding: '10px 20px'
           }} className="hidden-mobile">
             <button 
               onClick={() => onNavigate('landing')}
@@ -164,17 +157,36 @@ export function Header(props: HeaderProps) {
                 background: 'none',
                 border: 'none',
                 color: '#333',
+                fontFamily: 'Arial, sans-serif',
                 fontSize: '1rem',
                 fontWeight: '500',
+                padding: '8px 10px',
                 cursor: 'pointer',
-                padding: '8px 0',
-                transition: 'color 0.3s ease',
-                position: 'relative'
+                transition: 'color 0.3s'
               }}
-              onMouseOver={(e) => e.currentTarget.style.color = '#2F80ED'}
+              onMouseOver={(e) => e.currentTarget.style.color = '#0055a4'}
               onMouseOut={(e) => e.currentTarget.style.color = '#333'}
             >
               Accueil
+            </button>
+
+            <button 
+              onClick={() => onNavigate('teams')}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: '#333',
+                fontFamily: 'Arial, sans-serif',
+                fontSize: '1rem',
+                fontWeight: '500',
+                padding: '8px 10px',
+                cursor: 'pointer',
+                transition: 'color 0.3s'
+              }}
+              onMouseOver={(e) => e.currentTarget.style.color = '#0055a4'}
+              onMouseOut={(e) => e.currentTarget.style.color = '#333'}
+            >
+              Équipe
             </button>
             
             {isAuthenticated && (
@@ -184,13 +196,14 @@ export function Header(props: HeaderProps) {
                   background: 'none',
                   border: 'none',
                   color: '#333',
+                  fontFamily: 'Arial, sans-serif',
                   fontSize: '1rem',
                   fontWeight: '500',
+                  padding: '8px 10px',
                   cursor: 'pointer',
-                  padding: '8px 0',
-                  transition: 'color 0.3s ease'
+                  transition: 'color 0.3s'
                 }}
-                onMouseOver={(e) => e.currentTarget.style.color = '#2F80ED'}
+                onMouseOver={(e) => e.currentTarget.style.color = '#0055a4'}
                 onMouseOut={(e) => e.currentTarget.style.color = '#333'}
               >
                 Tableau de bord
@@ -202,23 +215,27 @@ export function Header(props: HeaderProps) {
                 <button 
                   onClick={() => onNavigate('login')}
                   style={{
-                    background: 'none',
-                    border: '2px solid #2F80ED',
-                    color: '#2F80ED',
-                    fontSize: '1rem',
+                    color: '#0055a4',
+                    backgroundColor: '#fff',
+                    border: '2px solid #0055a4',
                     fontWeight: '600',
+                    fontFamily: 'Arial, sans-serif',
+                    padding: '10px 18px',
+                    borderRadius: '50px',
+                    transition: 'all 0.3s ease',
+                    textAlign: 'center',
                     cursor: 'pointer',
-                    padding: '10px 25px',
-                    borderRadius: '8px',
-                    transition: 'all 0.3s ease'
+                    fontSize: '14px',
+                    lineHeight: '1',
+                    boxShadow: 'none'
                   }}
                   onMouseOver={(e) => {
-                    e.currentTarget.style.backgroundColor = '#2F80ED';
-                    e.currentTarget.style.color = 'white';
+                    e.currentTarget.style.backgroundColor = '#e6f0f7';
+                    e.currentTarget.style.boxShadow = '0 4px 10px rgba(0, 85, 164, 0.2)';
                   }}
                   onMouseOut={(e) => {
-                    e.currentTarget.style.backgroundColor = 'transparent';
-                    e.currentTarget.style.color = '#2F80ED';
+                    e.currentTarget.style.backgroundColor = '#fff';
+                    e.currentTarget.style.boxShadow = 'none';
                   }}
                 >
                   Connexion
@@ -226,24 +243,26 @@ export function Header(props: HeaderProps) {
                 <button 
                   onClick={() => onNavigate('register')}
                   style={{
-                    backgroundColor: '#2F80ED',
-                    border: 'none',
-                    color: 'white',
-                    fontSize: '1rem',
+                    color: '#fff',
+                    backgroundColor: '#ef4135',
+                    border: '2px solid #ef4135',
                     fontWeight: '600',
-                    cursor: 'pointer',
-                    padding: '10px 25px',
-                    borderRadius: '8px',
+                    fontFamily: 'Arial, sans-serif',
+                    padding: '10px 18px',
+                    borderRadius: '50px',
                     transition: 'all 0.3s ease',
-                    boxShadow: '0 4px 12px rgba(47, 128, 237, 0.3)'
+                    textAlign: 'center',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    lineHeight: '1'
                   }}
                   onMouseOver={(e) => {
-                    e.currentTarget.style.transform = 'translateY(-2px)';
-                    e.currentTarget.style.boxShadow = '0 6px 16px rgba(47, 128, 237, 0.4)';
+                    e.currentTarget.style.backgroundColor = '#d83a2d';
+                    e.currentTarget.style.boxShadow = '0 5px 15px rgba(239, 65, 53, 0.4)';
                   }}
                   onMouseOut={(e) => {
-                    e.currentTarget.style.transform = 'translateY(0)';
-                    e.currentTarget.style.boxShadow = '0 4px 12px rgba(47, 128, 237, 0.3)';
+                    e.currentTarget.style.backgroundColor = '#ef4135';
+                    e.currentTarget.style.boxShadow = 'none';
                   }}
                 >
                   S'inscrire
@@ -260,7 +279,7 @@ export function Header(props: HeaderProps) {
                   fontWeight: '600',
                   cursor: 'pointer',
                   padding: '10px 25px',
-                  borderRadius: '8px',
+                  borderRadius: '50px',
                   transition: 'all 0.3s ease'
                 }}
                 onMouseOver={(e) => {
@@ -318,6 +337,22 @@ export function Header(props: HeaderProps) {
             >
               Accueil
             </button>
+
+            <button 
+              onClick={() => { onNavigate('teams'); closeMenu(); }}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: '#333',
+                fontSize: '1rem',
+                fontWeight: '500',
+                cursor: 'pointer',
+                padding: '12px 0',
+                textAlign: 'left'
+              }}
+            >
+              Équipe
+            </button>
             
             {isAuthenticated && (
               <button 
@@ -343,13 +378,13 @@ export function Header(props: HeaderProps) {
                   onClick={() => { onNavigate('login'); closeMenu(); }}
                   style={{
                     backgroundColor: 'transparent',
-                    border: '2px solid #2F80ED',
-                    color: '#2F80ED',
+                    border: '2px solid #0055a4',
+                    color: '#0055a4',
                     fontSize: '1rem',
                     fontWeight: '600',
                     cursor: 'pointer',
                     padding: '12px',
-                    borderRadius: '8px',
+                    borderRadius: '50px',
                     width: '100%'
                   }}
                 >
@@ -358,14 +393,14 @@ export function Header(props: HeaderProps) {
                 <button 
                   onClick={() => { onNavigate('register'); closeMenu(); }}
                   style={{
-                    backgroundColor: '#2F80ED',
+                    backgroundColor: '#ef4135',
                     border: 'none',
                     color: 'white',
                     fontSize: '1rem',
                     fontWeight: '600',
                     cursor: 'pointer',
                     padding: '12px',
-                    borderRadius: '8px',
+                    borderRadius: '50px',
                     width: '100%'
                   }}
                 >

@@ -1,0 +1,33 @@
+.shell {
+  min-height: 100vh;
+  position: relative;
+  overflow: hidden;
+}
+
+.backgroundVideo {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 0;
+}
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(
+    135deg,
+    rgba(31, 169, 113, 0.08) 0%,
+    rgba(10, 22, 40, 0.45) 50%,
+    rgba(0, 0, 0, 0.55) 100%
+  );
+}
+
+.content {
+  position: relative;
+  z-index: 10;
+  min-height: 100vh;
+}
