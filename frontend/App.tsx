@@ -3,11 +3,13 @@ import { Header } from './shared/components/Header';
 import { VeloLandingPage } from './pages/LandingPage';
 import { FarialPage } from './pages/FarialPage';
 import { VelibRealtimePage } from './pages/VelibRealtimePage';
+import { TeamsPage } from './pages/TeamsPage';
 import { VeloLogin } from './features/auth/Login';
 import { VeloSignup } from './features/auth/Signup';
 import { VeloPreloader } from './shared/components/Preloader';
 import { BackgroundShell } from './shared/components/BackgroundShell';
 import { authAPI } from './api/auth';
+import type { AppPage } from './shared/types/navigation';
 
 // Lazy load dashboard components for better performance
 const LiveDashboard = lazy(() => import('./features/dashboard/LiveDashboard').then(m => ({ default: m.LiveDashboard })));
@@ -15,6 +17,7 @@ const StationBehavior = lazy(() => import('./features/dashboard/StationBehavior'
 const ArrondissementAnalysis = lazy(() => import('./features/dashboard/ArrondissementAnalysis').then(m => ({ default: m.ArrondissementAnalysis })));
 const MapAnalysis = lazy(() => import('./features/dashboard/MapAnalysis').then(m => ({ default: m.MapAnalysis })));
 const VelibRealtimeStats = lazy(() => import('./features/dashboard/VelibRealtimeStats').then(m => ({ default: m.VelibRealtimeStats })));
+const TeamsView = lazy(() => import('./features/teams/TeamsView').then(m => ({ default: m.TeamsView })));
 
 // Loading fallback component
 const LoadingFallback = memo(() => (
@@ -32,7 +35,7 @@ export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
     return localStorage.getItem('isAuthenticated') === 'true';
   });
-  const [currentPage, setCurrentPage] = useState<'landing' | 'login' | 'register' | 'dashboard' | 'farial' | 'velib'>('landing');
+  const [currentPage, setCurrentPage] = useState<AppPage>('landing');
   const [activeView, setActiveView] = useState('live');
 
   const handleLogin = () => {
@@ -95,6 +98,12 @@ export default function App() {
           <VelibRealtimePage onNavigate={setCurrentPage} />
         </Suspense>
       );
+    } else if (currentPage === 'teams') {
+      content = (
+        <Suspense fallback={<VeloPreloader />}>
+          <TeamsPage isAuthenticated={isAuthenticated} onNavigate={setCurrentPage} />
+        </Suspense>
+      );
     } else {
       content = (
         <Suspense fallback={<VeloPreloader />}>
@@ -119,6 +128,8 @@ export default function App() {
         return <MapAnalysis />;
       case 'velib':
         return <VelibRealtimeStats />;
+      case 'teams':
+        return <TeamsView />;
       default:
         return <LiveDashboard />;
     }

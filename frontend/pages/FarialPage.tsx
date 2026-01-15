@@ -1,11 +1,12 @@
 import React from 'react';
 import { VeloHeader } from '../shared/components/Header';
+import type { AppPage } from '../shared/types/navigation';
 import { useLandingStyles } from '../shared/hooks/useLandingStyles';
 import { ArrowLeft, Github, Linkedin, Mail, MapPin, Briefcase } from 'lucide-react';
 // import farialImg from '../assets/images/img/farial.png'; // Commented out until file exists
 
 interface FarialPageProps {
-  onNavigate: (page: 'landing' | 'login' | 'register' | 'dashboard' | 'farial') => void;
+  onNavigate: (page: AppPage) => void;
 }
 
 export const FarialPage: React.FC<FarialPageProps> = ({ onNavigate }) => {

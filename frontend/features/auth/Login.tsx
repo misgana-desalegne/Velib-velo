@@ -4,6 +4,7 @@ import { GoogleLogin } from '@react-oauth/google';
 import { VeloHeader } from '../../shared/components/Header';
 import { useLandingStyles } from '../../shared/hooks/useLandingStyles';
 import { authAPI } from '../../api/auth';
+import type { AppPage } from '../../shared/types/navigation';
 
 declare global {
   interface Window {
@@ -12,7 +13,7 @@ declare global {
 }
 
 interface VeloLoginProps {
-  onNavigate: (page: 'landing' | 'login' | 'register' | 'dashboard') => void;
+  onNavigate: (page: AppPage) => void;
   onLogin: () => void;
 }
 

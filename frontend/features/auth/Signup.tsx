@@ -3,9 +3,10 @@ import { ArrowLeft } from 'lucide-react';
 import { VeloHeader } from '../../shared/components/Header';
 import { useLandingStyles } from '../../shared/hooks/useLandingStyles';
 import { authAPI } from '../../api/auth';
+import type { AppPage } from '../../shared/types/navigation';
 
 interface VeloSignupProps {
-  onNavigate: (page: 'landing' | 'login' | 'register' | 'dashboard') => void;
+  onNavigate: (page: AppPage) => void;
   onRegister: () => void;
 }
 

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Activity, TrendingUp, Building2, Map, Bike, LogOut, Menu, X } from 'lucide-react';
+import { Activity, TrendingUp, Building2, Map, Bike, LogOut, Menu, X, Users } from 'lucide-react';
 import { Button } from '../ui/button';
 import logo from '@/assets/images/img/logo/LOGO velo.png';
+import type { AppPage } from '../types/navigation';
 
 // Dashboard Header Props
 interface DashboardHeaderProps {
@@ -14,7 +15,7 @@ interface DashboardHeaderProps {
 // Landing/Auth Header Props
 interface LandingHeaderProps {
   variant: 'landing';
-  onNavigate: (page: 'landing' | 'login' | 'register' | 'dashboard' | 'farial' | 'velib') => void;
+  onNavigate: (page: AppPage) => void;
   isAuthenticated: boolean;
   onLogout: () => void;
 }
@@ -42,6 +43,7 @@ export function Header(props: HeaderProps) {
       { id: 'arrondissement', label: 'Par Arrondissement', icon: Building2 },
       { id: 'map', label: 'Vue Cartographique', icon: Map },
       { id: 'velib', label: 'Vélib Temps Réel', icon: Bike },
+      { id: 'teams', label: 'Équipe', icon: Users },
     ];
 
     return (
@@ -166,6 +168,25 @@ export function Header(props: HeaderProps) {
               onMouseOut={(e) => e.currentTarget.style.color = '#333'}
             >
               Accueil
+            </button>
+
+            <button 
+              onClick={() => onNavigate('teams')}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: '#333',
+                fontFamily: 'Arial, sans-serif',
+                fontSize: '1rem',
+                fontWeight: '500',
+                padding: '8px 10px',
+                cursor: 'pointer',
+                transition: 'color 0.3s'
+              }}
+              onMouseOver={(e) => e.currentTarget.style.color = '#0055a4'}
+              onMouseOut={(e) => e.currentTarget.style.color = '#333'}
+            >
+              Équipe
             </button>
             
             {isAuthenticated && (
@@ -315,6 +336,22 @@ export function Header(props: HeaderProps) {
               }}
             >
               Accueil
+            </button>
+
+            <button 
+              onClick={() => { onNavigate('teams'); closeMenu(); }}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: '#333',
+                fontSize: '1rem',
+                fontWeight: '500',
+                cursor: 'pointer',
+                padding: '12px 0',
+                textAlign: 'left'
+              }}
+            >
+              Équipe
             </button>
             
             {isAuthenticated && (

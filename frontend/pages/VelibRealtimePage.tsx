@@ -1,8 +1,9 @@
 import { VeloHeader } from '../shared/components/Header';
 import { VelibRealtimeStats } from '../features/dashboard/VelibRealtimeStats';
+import type { AppPage } from '../shared/types/navigation';
 
 interface VelibRealtimePageProps {
-  onNavigate: (page: 'landing' | 'login' | 'register' | 'dashboard' | 'farial' | 'velib') => void;
+  onNavigate: (page: AppPage) => void;
 }
 
 export function VelibRealtimePage({ onNavigate }: VelibRealtimePageProps) {

@@ -4,9 +4,10 @@ import { useLandingStyles } from '../shared/hooks/useLandingStyles';
 import styles from './LandingPage.module.css';
 import partnerLogo from '../assets/images/Logo-Greta.png';
 // import farialImg from '../assets/images/img/farial.png';
+import type { AppPage } from '../shared/types/navigation';
 
 interface VeloLandingPageProps {
-  onNavigate: (page: 'landing' | 'login' | 'register' | 'dashboard' | 'farial' | 'velib') => void;
+  onNavigate: (page: AppPage) => void;
 }
 
 export const VeloLandingPage: React.FC<VeloLandingPageProps> = ({ onNavigate }) => {

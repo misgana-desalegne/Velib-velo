@@ -246,7 +246,7 @@ export function VelibRealtimeStats() {
   return (
     <div className="p-4 md:p-8">
       <div className="mx-auto max-w-6xl">
-        <Card className="border-white/10 bg-card/70 backdrop-blur-md text-red-600 [&_*]:!text-red-600">
+        <Card className="border-white/15 bg-white/92 backdrop-blur-xl shadow-2xl text-red-700 [&_*]:!text-red-700">
           <CardHeader className="border-b border-white/10">
             <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
               <div className="flex items-start gap-3">
@@ -257,7 +257,7 @@ export function VelibRealtimeStats() {
                   <CardTitle className="text-xl md:text-2xl font-semibold tracking-tight !text-foreground">
                     Vélib — Temps réel
                   </CardTitle>
-                  <CardDescription className="text-sm text-red-600">
+                  <CardDescription className="text-sm !text-red-700">
                     Source: opendata.paris.fr • Mise à jour: {data?.updated_at ?? '—'} ({data ? lastUpdatedLabel : '—'})
                   </CardDescription>
                 </div>
@@ -370,17 +370,17 @@ export function VelibRealtimeStats() {
                   </div>
 
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                    <Card className="lg:col-span-2 bg-card/60 backdrop-blur">
+                    <Card className="lg:col-span-2 bg-white/90 backdrop-blur">
                       <CardHeader className="border-b border-white/10">
                         <CardTitle className="text-base">Top zones</CardTitle>
-                        <CardDescription>Classement par vélos disponibles (bikes_available).</CardDescription>
+                        <CardDescription>Classement par vélos disponibles.</CardDescription>
                         <CardAction className="flex items-center gap-2">
                           <Button
                             variant={stackBikesDocks ? 'default' : 'outline'}
                             size="sm"
                             onClick={() => setStackBikesDocks((v) => !v)}
                           >
-                            {stackBikesDocks ? 'Bikes+Bornes' : 'Bikes seul'}
+                            {stackBikesDocks ? 'Vélos + Bornes' : 'Vélos seulement'}
                           </Button>
                         </CardAction>
                       </CardHeader>
@@ -426,7 +426,7 @@ export function VelibRealtimeStats() {
                       </CardContent>
                     </Card>
 
-                    <Card className="bg-card/60 backdrop-blur">
+                    <Card className="bg-white/90 backdrop-blur">
                       <CardHeader className="border-b border-white/10">
                         <CardTitle className="text-base">Répartition</CardTitle>
                         <CardDescription>Mécanique vs Électrique</CardDescription>
@@ -485,7 +485,7 @@ export function VelibRealtimeStats() {
                     </Card>
                   </div>
 
-                  <Card className="mt-4 bg-card/60 backdrop-blur">
+                  <Card className="mt-4 bg-white/90 backdrop-blur">
                     <CardHeader className="border-b border-white/10">
                       <CardTitle className="text-base">Tendance (auto-refresh)</CardTitle>
                       <CardDescription>Historique local depuis l’ouverture de la page.</CardDescription>
@@ -544,45 +544,47 @@ export function VelibRealtimeStats() {
                 </TabsContent>
 
                 <TabsContent value="zones">
-                  <Card className="bg-card/60 backdrop-blur">
+                  <Card className="bg-white/90 backdrop-blur">
                     <CardHeader className="border-b border-white/10">
                       <CardTitle className="text-base">Top zones (table)</CardTitle>
                       <CardDescription>Vue tabulaire rapide et lisible.</CardDescription>
                     </CardHeader>
                     <CardContent className="pt-6">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Zone</TableHead>
-                            <TableHead>Stations</TableHead>
-                            <TableHead>Vélos</TableHead>
-                            <TableHead>Bornes</TableHead>
-                            <TableHead>Méca</TableHead>
-                            <TableHead>Élec</TableHead>
-                            <TableHead>Capacité</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {visibleAreas.map((a) => (
-                            <TableRow key={a.name}>
-                              <TableCell className="font-medium">{a.name}</TableCell>
-                              <TableCell>{formatNumber(a.stations)}</TableCell>
-                              <TableCell>{formatNumber(a.bikes_available)}</TableCell>
-                              <TableCell>{formatNumber(a.docks_available)}</TableCell>
-                              <TableCell>{formatNumber(a.mechanical_available)}</TableCell>
-                              <TableCell>{formatNumber(a.ebike_available)}</TableCell>
-                              <TableCell>{formatNumber(a.capacity)}</TableCell>
+                      <div className="rounded-xl border border-red-200/60 bg-white/95 overflow-hidden">
+                        <Table>
+                          <TableHeader>
+                            <TableRow className="bg-red-50/70">
+                              <TableHead className="sticky top-0 bg-red-50/90 backdrop-blur !text-red-900">Zone</TableHead>
+                              <TableHead className="sticky top-0 bg-red-50/90 backdrop-blur text-right !text-red-900">Stations</TableHead>
+                              <TableHead className="sticky top-0 bg-red-50/90 backdrop-blur text-right !text-red-900">Vélos</TableHead>
+                              <TableHead className="sticky top-0 bg-red-50/90 backdrop-blur text-right !text-red-900">Bornes</TableHead>
+                              <TableHead className="sticky top-0 bg-red-50/90 backdrop-blur text-right !text-red-900">Méca</TableHead>
+                              <TableHead className="sticky top-0 bg-red-50/90 backdrop-blur text-right !text-red-900">Élec</TableHead>
+                              <TableHead className="sticky top-0 bg-red-50/90 backdrop-blur text-right !text-red-900">Capacité</TableHead>
                             </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
+                          </TableHeader>
+                          <TableBody>
+                            {visibleAreas.map((a, idx) => (
+                              <TableRow key={a.name} className={idx % 2 === 0 ? 'bg-white' : 'bg-red-50/30'}>
+                                <TableCell className="font-semibold !text-red-900">{a.name}</TableCell>
+                                <TableCell className="text-right font-mono tabular-nums">{formatNumber(a.stations)}</TableCell>
+                                <TableCell className="text-right font-mono tabular-nums">{formatNumber(a.bikes_available)}</TableCell>
+                                <TableCell className="text-right font-mono tabular-nums">{formatNumber(a.docks_available)}</TableCell>
+                                <TableCell className="text-right font-mono tabular-nums">{formatNumber(a.mechanical_available)}</TableCell>
+                                <TableCell className="text-right font-mono tabular-nums">{formatNumber(a.ebike_available)}</TableCell>
+                                <TableCell className="text-right font-mono tabular-nums">{formatNumber(a.capacity)}</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
                     </CardContent>
                   </Card>
                 </TabsContent>
 
                 <TabsContent value="explore">
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                    <Card className="lg:col-span-1 bg-card/60 backdrop-blur">
+                    <Card className="lg:col-span-1 bg-white/90 backdrop-blur">
                       <CardHeader className="border-b border-white/10">
                         <CardTitle className="text-base">Contrôles</CardTitle>
                         <CardDescription>Filtrer / trier / explorer les zones.</CardDescription>
@@ -667,7 +669,7 @@ export function VelibRealtimeStats() {
                       </CardContent>
                     </Card>
 
-                    <Card className="lg:col-span-2 bg-card/60 backdrop-blur">
+                    <Card className="lg:col-span-2 bg-white/90 backdrop-blur">
                       <CardHeader className="border-b border-white/10">
                         <CardTitle className="text-base">Graphique exploratoire</CardTitle>
                         <CardDescription>
@@ -704,32 +706,34 @@ export function VelibRealtimeStats() {
 
                         <div className="mt-6">
                           <div className="text-sm font-medium mb-2">Table (tri + filtre)</div>
-                          <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead>Zone</TableHead>
-                                <TableHead>Stations</TableHead>
-                                <TableHead>Vélos</TableHead>
-                                <TableHead>Bornes</TableHead>
-                                <TableHead>Méca</TableHead>
-                                <TableHead>Élec</TableHead>
-                                <TableHead>Capacité</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {visibleAreas.map((a) => (
-                                <TableRow key={a.name}>
-                                  <TableCell className="font-medium">{a.name}</TableCell>
-                                  <TableCell>{formatNumber(a.stations)}</TableCell>
-                                  <TableCell>{formatNumber(a.bikes_available)}</TableCell>
-                                  <TableCell>{formatNumber(a.docks_available)}</TableCell>
-                                  <TableCell>{formatNumber(a.mechanical_available)}</TableCell>
-                                  <TableCell>{formatNumber(a.ebike_available)}</TableCell>
-                                  <TableCell>{formatNumber(a.capacity)}</TableCell>
+                          <div className="rounded-xl border border-red-200/60 bg-white/95 overflow-hidden">
+                            <Table>
+                              <TableHeader>
+                                <TableRow className="bg-red-50/70">
+                                  <TableHead className="sticky top-0 bg-red-50/90 backdrop-blur !text-red-900">Zone</TableHead>
+                                  <TableHead className="sticky top-0 bg-red-50/90 backdrop-blur text-right !text-red-900">Stations</TableHead>
+                                  <TableHead className="sticky top-0 bg-red-50/90 backdrop-blur text-right !text-red-900">Vélos</TableHead>
+                                  <TableHead className="sticky top-0 bg-red-50/90 backdrop-blur text-right !text-red-900">Bornes</TableHead>
+                                  <TableHead className="sticky top-0 bg-red-50/90 backdrop-blur text-right !text-red-900">Méca</TableHead>
+                                  <TableHead className="sticky top-0 bg-red-50/90 backdrop-blur text-right !text-red-900">Élec</TableHead>
+                                  <TableHead className="sticky top-0 bg-red-50/90 backdrop-blur text-right !text-red-900">Capacité</TableHead>
                                 </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
+                              </TableHeader>
+                              <TableBody>
+                                {visibleAreas.map((a, idx) => (
+                                  <TableRow key={a.name} className={idx % 2 === 0 ? 'bg-white' : 'bg-red-50/30'}>
+                                    <TableCell className="font-semibold !text-red-900">{a.name}</TableCell>
+                                    <TableCell className="text-right font-mono tabular-nums">{formatNumber(a.stations)}</TableCell>
+                                    <TableCell className="text-right font-mono tabular-nums">{formatNumber(a.bikes_available)}</TableCell>
+                                    <TableCell className="text-right font-mono tabular-nums">{formatNumber(a.docks_available)}</TableCell>
+                                    <TableCell className="text-right font-mono tabular-nums">{formatNumber(a.mechanical_available)}</TableCell>
+                                    <TableCell className="text-right font-mono tabular-nums">{formatNumber(a.ebike_available)}</TableCell>
+                                    <TableCell className="text-right font-mono tabular-nums">{formatNumber(a.capacity)}</TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </div>
                         </div>
                       </CardContent>
                     </Card>
