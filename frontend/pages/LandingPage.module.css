@@ -276,3 +276,188 @@
   color: rgba(255,255,255,0.5);
   font-size: 0.9rem;
 }
+
+/* Team Header with Add Button */
+.teamTitleWrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.addMemberButton {
+  background: linear-gradient(135deg, #1fa969 0%, #1a8555 100%);
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(31, 169, 113, 0.3);
+}
+
+.addMemberButton:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(31, 169, 113, 0.4);
+}
+
+/* Member Action Buttons */
+.memberActions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 12px;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.teamCard:hover .memberActions {
+  opacity: 1;
+}
+
+.editButton,
+.deleteButton {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: white;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(10px);
+}
+
+.editButton:hover {
+  background: rgba(31, 169, 113, 0.3);
+  border-color: rgba(31, 169, 113, 0.5);
+  transform: scale(1.05);
+}
+
+.deleteButton:hover {
+  background: rgba(239, 65, 53, 0.3);
+  border-color: rgba(239, 65, 53, 0.5);
+  transform: scale(1.05);
+}
+
+/* Edit Modal */
+.editModalOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(5px);
+}
+
+.editModal {
+  background: linear-gradient(135deg, rgba(10, 22, 40, 0.95) 0%, rgba(26, 35, 50, 0.95) 100%);
+  border: 1px solid rgba(31, 169, 113, 0.3);
+  border-radius: 15px;
+  padding: 30px;
+  max-width: 500px;
+  width: 90%;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.editModalTitle {
+  color: white;
+  font-size: 1.3rem;
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.formGroup {
+  margin-bottom: 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.formGroup label {
+  color: rgba(255, 255, 255, 0.8);
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.formInput {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(31, 169, 113, 0.2);
+  border-radius: 8px;
+  padding: 12px 15px;
+  color: white;
+  font-size: 0.95rem;
+  transition: all 0.3s ease;
+  font-family: inherit;
+}
+
+.formInput:focus {
+  outline: none;
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(31, 169, 113, 0.5);
+  box-shadow: 0 0 10px rgba(31, 169, 113, 0.2);
+}
+
+.formInput::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.formActions {
+  display: flex;
+  gap: 10px;
+  margin-top: 25px;
+}
+
+.saveButton,
+.cancelButton {
+  flex: 1;
+  padding: 12px 20px;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.saveButton {
+  background: linear-gradient(135deg, #1fa969 0%, #1a8555 100%);
+  color: white;
+  box-shadow: 0 4px 15px rgba(31, 169, 113, 0.3);
+}
+
+.saveButton:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(31, 169, 113, 0.4);
+}
+
+.cancelButton {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.cancelButton:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.3);
+}

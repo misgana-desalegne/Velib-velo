@@ -1,8 +1,14 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { VeloHeader } from '../shared/components/Header';
 import { useLandingStyles } from '../shared/hooks/useLandingStyles';
 import { BackgroundShell } from '../shared/components/BackgroundShell';
 import styles from './LandingPage.module.css';
+
+interface TeamMember {
+  name: string;
+  role: string;
+  image: string;
+}
 
 interface VeloLandingPageProps {
   onNavigate: (page: 'landing' | 'login' | 'register' | 'dashboard') => void;
@@ -15,11 +21,58 @@ export const VeloLandingPage: React.FC<VeloLandingPageProps> = ({ onNavigate }) 
   // Use a public asset URL (served from frontend/public)
   const heroImageUrl = '/Data-Analysis-Dashboard/assets/img/hero/hero-5/velo1.png';
 
-  const teamMembers = [
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([
     { name: 'Sophie Moreau', role: 'Data Scientist', image: heroImageUrl },
     { name: 'Antoine Dubois', role: 'Développeur Full-Stack', image: '/Data-Analysis-Dashboard/assets/img/hero/hero-5/hero-img.svg' },
     { name: 'Claire Martin', role: 'Analyste Mobilité', image: '/Data-Analysis-Dashboard/assets/img/hero/hero-5/hero-bg.svg' },
-  ];
+  ]);
+
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [editForm, setEditForm] = useState<TeamMember>({ name: '', role: '', image: '' });
+  const [isAddingMember, setIsAddingMember] = useState(false);
+
+  const handleEditClick = (index: number) => {
+    setEditingIndex(index);
+    setEditForm(teamMembers[index]);
+    setIsAddingMember(false);
+  };
+
+  const handleAddClick = () => {
+    setEditingIndex(null);
+    setEditForm({ name: '', role: '', image: heroImageUrl });
+    setIsAddingMember(true);
+  };
+
+  const handleSave = () => {
+    if (!editForm.name.trim() || !editForm.role.trim()) {
+      alert('Veuillez remplir tous les champs');
+      return;
+    }
+
+    if (isAddingMember) {
+      setTeamMembers([...teamMembers, editForm]);
+    } else if (editingIndex !== null) {
+      const updatedMembers = [...teamMembers];
+      updatedMembers[editingIndex] = editForm;
+      setTeamMembers(updatedMembers);
+    }
+
+    setEditingIndex(null);
+    setIsAddingMember(false);
+    setEditForm({ name: '', role: '', image: '' });
+  };
+
+  const handleCancel = () => {
+    setEditingIndex(null);
+    setIsAddingMember(false);
+    setEditForm({ name: '', role: '', image: '' });
+  };
+
+  const handleDelete = (index: number) => {
+    if (window.confirm('Êtes-vous sûr de vouloir supprimer ce membre?')) {
+      setTeamMembers(teamMembers.filter((_, i) => i !== index));
+    }
+  };
 
   return (
     <BackgroundShell>
@@ -86,9 +139,18 @@ export const VeloLandingPage: React.FC<VeloLandingPageProps> = ({ onNavigate }) 
           <div className={styles.teamContainer}>
             {/* Section Header */}
             <div className={styles.teamHeader}>
-              <h2 className={styles.teamTitle}>
-                Notre Équipe
-              </h2>
+              <div className={styles.teamTitleWrapper}>
+                <h2 className={styles.teamTitle}>
+                  Notre Équipe
+                </h2>
+                <button 
+                  onClick={handleAddClick}
+                  className={styles.addMemberButton}
+                  title="Ajouter un membre"
+                >
+                  + Ajouter
+                </button>
+              </div>
               <p className={styles.teamSubtitle}>
                 Des experts passionnés par la mobilité urbaine et l'analyse de données
               </p>
@@ -115,9 +177,80 @@ export const VeloLandingPage: React.FC<VeloLandingPageProps> = ({ onNavigate }) 
                   <p className={styles.memberRole}>
                     {member.role}
                   </p>
+
+                  {/* Edit/Delete Buttons */}
+                  <div className={styles.memberActions}>
+                    <button
+                      onClick={() => handleEditClick(index)}
+                      className={styles.editButton}
+                      title="Éditer"
+                    >
+                      ✏️
+                    </button>
+                    <button
+                      onClick={() => handleDelete(index)}
+                      className={styles.deleteButton}
+                      title="Supprimer"
+                    >
+                      🗑️
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
+
+            {/* Edit Form Modal */}
+            {(editingIndex !== null || isAddingMember) && (
+              <div className={styles.editModalOverlay} onClick={handleCancel}>
+                <div className={styles.editModal} onClick={(e) => e.stopPropagation()}>
+                  <h3 className={styles.editModalTitle}>
+                    {isAddingMember ? 'Ajouter un nouveau membre' : 'Éditer le membre'}
+                  </h3>
+                  
+                  <div className={styles.formGroup}>
+                    <label>Nom:</label>
+                    <input
+                      type="text"
+                      value={editForm.name}
+                      onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                      placeholder="Nom du membre"
+                      className={styles.formInput}
+                    />
+                  </div>
+
+                  <div className={styles.formGroup}>
+                    <label>Rôle:</label>
+                    <input
+                      type="text"
+                      value={editForm.role}
+                      onChange={(e) => setEditForm({ ...editForm, role: e.target.value })}
+                      placeholder="Rôle du membre"
+                      className={styles.formInput}
+                    />
+                  </div>
+
+                  <div className={styles.formGroup}>
+                    <label>URL de l'image:</label>
+                    <input
+                      type="text"
+                      value={editForm.image}
+                      onChange={(e) => setEditForm({ ...editForm, image: e.target.value })}
+                      placeholder="URL de l'image"
+                      className={styles.formInput}
+                    />
+                  </div>
+
+                  <div className={styles.formActions}>
+                    <button onClick={handleSave} className={styles.saveButton}>
+                      Enregistrer
+                    </button>
+                    <button onClick={handleCancel} className={styles.cancelButton}>
+                      Annuler
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Organization Logo Section */}
             <div className={styles.organizationSection}>
