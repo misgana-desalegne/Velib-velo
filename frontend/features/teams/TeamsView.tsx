@@ -181,10 +181,10 @@ export function TeamsView({
                         <img
                           src={member.imageUrl}
                           alt={member.name}
-                          className="h-14 w-14 rounded-2xl object-cover ring-1 ring-gray-200"
+                          className="h-20 w-20 rounded-full object-cover ring-2 ring-gray-200 flex-shrink-0"
                         />
                       ) : (
-                        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gray-100 text-sm font-semibold text-gray-700 ring-1 ring-gray-200">
+                        <div className="flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-blue-100 to-sky-100 text-lg font-bold text-gray-700 ring-2 ring-gray-200 flex-shrink-0">
                           {initials(member.name)}
                         </div>
                       )}
