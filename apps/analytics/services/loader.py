@@ -75,7 +75,12 @@ class BikeStationLoader:
                      lat_col: str = 'latitude',
                      lon_col: str = 'longitude',
                      capacity_col: str = 'capacity',
-                     commune_code_col: str = 'commune_code') -> Dict[str, int]:
+                     commune_code_col: str = 'commune_code',
+                     mechanical_col: str = 'mechanical_bikes',
+                     electric_col: str = 'electric_bikes',
+                     is_installed_col: str = 'is_installed',
+                     is_renting_col: str = 'is_renting',
+                     is_returning_col: str = 'is_returning') -> Dict[str, int]:
         """
         Load or update bike stations from DataFrame
         
@@ -88,6 +93,11 @@ class BikeStationLoader:
             lon_col: Column name for longitude
             capacity_col: Column name for capacity/total_docks
             commune_code_col: Column name for commune code
+            mechanical_col: Column name for mechanical bikes count
+            electric_col: Column name for electric bikes count
+            is_installed_col: Column name for installation status
+            is_renting_col: Column name for renting status
+            is_returning_col: Column name for returning status
             
         Returns:
             Dictionary mapping station IDs to model IDs
@@ -98,6 +108,16 @@ class BikeStationLoader:
         station_cols = [station_id_col, name_col, lat_col, lon_col, commune_code_col]
         if capacity_col in df.columns:
             station_cols.append(capacity_col)
+        if mechanical_col in df.columns:
+            station_cols.append(mechanical_col)
+        if electric_col in df.columns:
+            station_cols.append(electric_col)
+        if is_installed_col in df.columns:
+            station_cols.append(is_installed_col)
+        if is_renting_col in df.columns:
+            station_cols.append(is_renting_col)
+        if is_returning_col in df.columns:
+            station_cols.append(is_returning_col)
         
         available_cols = [col for col in station_cols if col in df.columns]
         station_data = df[available_cols].drop_duplicates(subset=[station_id_col])
@@ -110,11 +130,31 @@ class BikeStationLoader:
                 latitude = float(row[lat_col]) if pd.notna(row[lat_col]) else None
                 longitude = float(row[lon_col]) if pd.notna(row[lon_col]) else None
                 
-                # Get total docks from capacity or available_bikes + available_docks
+                # Get capacity
                 if capacity_col in df.columns and pd.notna(row.get(capacity_col)):
-                    total_docks = int(row[capacity_col])
+                    capacity = int(row[capacity_col])
                 else:
-                    total_docks = 28  # Default capacity
+                    capacity = 28  # Default capacity
+                
+                # Get bike counts
+                mechanical = int(row[mechanical_col]) if mechanical_col in df.columns and pd.notna(row.get(mechanical_col)) else 0
+                electric = int(row[electric_col]) if electric_col in df.columns and pd.notna(row.get(electric_col)) else 0
+                
+                # Get operational status - handle yes/no strings
+                is_installed = True
+                if is_installed_col in df.columns and pd.notna(row.get(is_installed_col)):
+                    val = str(row[is_installed_col]).upper()
+                    is_installed = val in ['OUI', 'YES', 'TRUE', '1', 'Y']
+                
+                is_renting = True
+                if is_renting_col in df.columns and pd.notna(row.get(is_renting_col)):
+                    val = str(row[is_renting_col]).upper()
+                    is_renting = val in ['OUI', 'YES', 'TRUE', '1', 'Y']
+                
+                is_returning = True
+                if is_returning_col in df.columns and pd.notna(row.get(is_returning_col)):
+                    val = str(row[is_returning_col]).upper()
+                    is_returning = val in ['OUI', 'YES', 'TRUE', '1', 'Y']
                     
             except (ValueError, TypeError):
                 logger.warning(f"Invalid numeric data for station {station_id}")
@@ -134,11 +174,32 @@ class BikeStationLoader:
                         'name': name,
                         'latitude': Decimal(str(latitude)),
                         'longitude': Decimal(str(longitude)),
-                        'total_docks': total_docks,
+                        'capacity': capacity,
+                        'mechanical_bikes': mechanical,
+                        'electric_bikes': electric,
                         'commune_id': commune_id,
-                        'is_active': True
+                        'is_installed': is_installed,
+                        'is_renting': is_renting,
+                        'is_returning': is_returning,
+                        'activity_status': 'actif' if is_installed and is_renting else 'maintenance'
                     }
                 )
+                
+                # Update existing stations with latest data
+                if not created:
+                    station.name = name
+                    station.latitude = Decimal(str(latitude))
+                    station.longitude = Decimal(str(longitude))
+                    station.capacity = capacity
+                    station.mechanical_bikes = mechanical
+                    station.electric_bikes = electric
+                    station.is_installed = is_installed
+                    station.is_renting = is_renting
+                    station.is_returning = is_returning
+                    if not station.activity_status or station.activity_status == 'unknown':
+                        station.activity_status = 'actif' if is_installed and is_renting else 'maintenance'
+                    station.save()
+                
                 stations_dict[station_id] = station.id
                 
                 if created:
@@ -161,6 +222,11 @@ class StationStatusLoader:
                      bikes_col: str = 'available_bikes',
                      docks_col: str = 'available_docks',
                      timestamp_col: str = 'timestamp',
+                     mechanical_col: str = 'available_mechanical',
+                     electric_col: str = 'available_electric',
+                     is_installed_col: str = 'is_installed',
+                     is_renting_col: str = 'is_renting',
+                     is_returning_col: str = 'is_returning',
                      batch_size: int = 1000) -> int:
         """
         Load station status records into database
@@ -172,6 +238,11 @@ class StationStatusLoader:
             bikes_col: Column name for available bikes
             docks_col: Column name for available docks
             timestamp_col: Column name for timestamp
+            mechanical_col: Column name for available mechanical bikes
+            electric_col: Column name for available electric bikes
+            is_installed_col: Column name for installation status
+            is_renting_col: Column name for renting status
+            is_returning_col: Column name for returning status
             batch_size: Batch size for bulk_create
             
         Returns:
@@ -191,6 +262,8 @@ class StationStatusLoader:
             try:
                 available_bikes = int(row[bikes_col]) if pd.notna(row[bikes_col]) else 0
                 available_docks = int(row[docks_col]) if pd.notna(row[docks_col]) else 0
+                available_mechanical = int(row[mechanical_col]) if mechanical_col in df.columns and pd.notna(row.get(mechanical_col)) else 0
+                available_electric = int(row[electric_col]) if electric_col in df.columns and pd.notna(row.get(electric_col)) else 0
                 
                 # Parse timestamp - keep it simple
                 if pd.notna(row[timestamp_col]):
@@ -210,12 +283,33 @@ class StationStatusLoader:
                 else:
                     timestamp = timezone.now()
                 
+                # Get operational status - handle yes/no strings
+                is_installed = True
+                if is_installed_col in df.columns and pd.notna(row.get(is_installed_col)):
+                    val = str(row[is_installed_col]).upper()
+                    is_installed = val in ['OUI', 'YES', 'TRUE', '1', 'Y']
+                
+                is_renting = True
+                if is_renting_col in df.columns and pd.notna(row.get(is_renting_col)):
+                    val = str(row[is_renting_col]).upper()
+                    is_renting = val in ['OUI', 'YES', 'TRUE', '1', 'Y']
+                
+                is_returning = True
+                if is_returning_col in df.columns and pd.notna(row.get(is_returning_col)):
+                    val = str(row[is_returning_col]).upper()
+                    is_returning = val in ['OUI', 'YES', 'TRUE', '1', 'Y']
+                
                 status = StationStatus(
                     station_id=stations_dict[station_id],
                     available_bikes=available_bikes,
                     available_docks=available_docks,
+                    available_mechanical=available_mechanical,
+                    available_electric=available_electric,
                     timestamp=timestamp,
-                    is_operational=available_bikes + available_docks > 0
+                    is_installed=is_installed,
+                    is_renting=is_renting,
+                    is_returning=is_returning,
+                    is_operational=is_installed and is_renting and is_returning
                 )
                 status_records.append(status)
                 count += 1
