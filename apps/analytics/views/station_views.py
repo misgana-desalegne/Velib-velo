@@ -23,9 +23,13 @@ class BikeStationViewSet(viewsets.ModelViewSet):
         """Filter queryset based on query parameters."""
         queryset = super().get_queryset()
         arrondissement = self.request.query_params.get('arrondissement', None)
+        commune_code = self.request.query_params.get('commune_code', None)
         
         if arrondissement:
             queryset = StationService.get_stations_by_arrondissement(arrondissement)
+        
+        if commune_code:
+            queryset = queryset.filter(commune__code=commune_code)
         
         return queryset
     

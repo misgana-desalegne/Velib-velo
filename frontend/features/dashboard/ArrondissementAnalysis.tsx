@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Card } from '../../shared/ui/card';
 import { Badge } from '../../shared/ui/badge';
-import { Building2, Bike, TrendingUp, MapPin, AlertCircle } from 'lucide-react';
+import { Building2, Bike, TrendingUp, MapPin, AlertCircle, Zap } from 'lucide-react';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { api, API_ENDPOINTS } from '../../api/config';
 
@@ -13,6 +13,7 @@ interface CommuneData {
   docks: number;
   capacity: number;
   utilization: number;
+  entropy: number;
   population: number;
 }
 
@@ -50,7 +51,7 @@ export function ArrondissementAnalysis() {
     return [
       { metric: 'Stations', ...Object.fromEntries(top4.map(c => [c.code, c.stations])) },
       { metric: 'Bikes Available', ...Object.fromEntries(top4.map(c => [c.code, c.bikes])) },
-      { metric: 'Utilization %', ...Object.fromEntries(top4.map(c => [c.code, c.utilization])) },
+      { metric: 'Entropy (bits)', ...Object.fromEntries(top4.map(c => [c.code, parseFloat((c.entropy || 0).toFixed(2))])) },
     ];
   }, [communes]);
 
@@ -88,12 +89,12 @@ export function ArrondissementAnalysis() {
         <p className="text-gray-600">Compare station performance across communes in the Île-de-France region</p>
       </div>
 
-      {/* Top Communes by Utilization */}
+      {/* Top Communes by Entropy */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 mb-8">
         {topCommunes.map(commune => (
           <Card 
             key={commune.code} 
-            className="p-6 hover:shadow-lg transition-shadow cursor-pointer border-l-4 border-l-blue-500"
+            className="p-6 hover:shadow-lg transition-shadow cursor-pointer border-l-4 border-l-purple-500"
             onClick={() => setSelectedCommune(commune.code)}
           >
             <div className="flex items-start justify-between mb-4">
@@ -102,12 +103,15 @@ export function ArrondissementAnalysis() {
                 <h3 className="text-lg font-bold text-gray-900">{commune.code}</h3>
                 <p className="text-sm font-medium text-gray-700 mt-2">{commune.name}</p>
               </div>
-              <Badge className="bg-green-100 text-green-800 whitespace-nowrap">{commune.utilization.toFixed(1)}%</Badge>
+              <Badge className="bg-purple-100 text-purple-800 whitespace-nowrap flex items-center gap-1">
+                <Zap className="w-3 h-3" />
+                {(commune.entropy || 0).toFixed(2)}
+              </Badge>
             </div>
             <div className="space-y-3 text-sm">
               <div className="flex items-center gap-2 text-gray-600">
-                <Bike className="w-4 h-4" />
-                <span>{commune.bikes} bikes available</span>
+                <Bike className="w-4 h-4 text-blue-600" />
+                <span className="font-semibold text-gray-900">{commune.bikes} bikes</span>
               </div>
               <div className="flex items-center gap-2 text-gray-600">
                 <Building2 className="w-4 h-4" />
@@ -120,9 +124,9 @@ export function ArrondissementAnalysis() {
 
       {/* Main Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-        {/* Utilization by Commune */}
+        {/* Entropy by Commune */}
         <Card className="p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-6">Utilization Rate by Commune</h3>
+          <h3 className="text-lg font-semibold text-gray-900 mb-6">Entropy (Unpredictability) by Commune</h3>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart 
               data={communes}
@@ -144,14 +148,15 @@ export function ArrondissementAnalysis() {
                     return (
                       <div className="bg-white p-3 border border-gray-200 rounded shadow-lg">
                         <p className="font-semibold text-gray-900">{data.name}</p>
-                        <p className="text-sm text-gray-600">Utilization: {data.utilization.toFixed(1)}%</p>
+                        <p className="text-sm text-gray-600">Entropy: {data.entropy.toFixed(2)} bits</p>
+                        <p className="text-sm text-gray-600">Bikes: {data.bikes}</p>
                       </div>
                     );
                   }
                   return null;
                 }}
               />
-              <Bar dataKey="utilization" fill="#3b82f6" name="Utilization %" />
+              <Bar dataKey="entropy" fill="#8b5cf6" name="Entropy (bits)" />
             </BarChart>
           </ResponsiveContainer>
         </Card>
@@ -220,14 +225,26 @@ export function ArrondissementAnalysis() {
         <Card className="p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600 mb-2">Avg Utilization</p>
+              <p className="text-sm text-gray-600 mb-2">Avg Entropy</p>
               <p className="text-3xl font-bold text-gray-900">
                 {communes.length > 0 
-                  ? (communes.reduce((sum, c) => sum + c.utilization, 0) / communes.length).toFixed(1)
-                  : '0'}%
+                  ? (communes.reduce((sum, c) => sum + (c.entropy || 0), 0) / communes.length).toFixed(2)
+                  : '0'}
+              </p>
+              <p className="text-xs text-gray-500 mt-1">bits (unpredictability)</p>
+            </div>
+            <Zap className="w-8 h-8 text-purple-500" />
+          </div>
+        </Card>
+        <Card className="p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600 mb-2">Total Bikes Available</p>
+              <p className="text-3xl font-bold text-gray-900">
+                {communes.reduce((sum, c) => sum + c.bikes, 0).toLocaleString()}
               </p>
             </div>
-            <TrendingUp className="w-8 h-8 text-green-500" />
+            <Bike className="w-8 h-8 text-blue-500" />
           </div>
         </Card>
         <Card className="p-6">
@@ -250,17 +267,6 @@ export function ArrondissementAnalysis() {
             <Building2 className="w-8 h-8 text-purple-500" />
           </div>
         </Card>
-        <Card className="p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600 mb-2">Total Bikes</p>
-              <p className="text-3xl font-bold text-gray-900">
-                {communes.reduce((sum, c) => sum + c.bikes, 0).toLocaleString()}
-              </p>
-            </div>
-            <Bike className="w-8 h-8 text-orange-500" />
-          </div>
-        </Card>
       </div>
 
       {/* Detailed Table */}
@@ -273,9 +279,9 @@ export function ArrondissementAnalysis() {
                 <th className="text-left py-3 px-4 text-gray-700 font-semibold">INSEE Code</th>
                 <th className="text-left py-3 px-4 text-gray-700 font-semibold">Commune</th>
                 <th className="text-center py-3 px-4 text-gray-700 font-semibold">Stations</th>
-                <th className="text-right py-3 px-4 text-gray-700 font-semibold">Bikes</th>
+                <th className="text-right py-3 px-4 text-gray-700 font-semibold">Bikes Available</th>
                 <th className="text-right py-3 px-4 text-gray-700 font-semibold">Docks</th>
-                <th className="text-right py-3 px-4 text-gray-700 font-semibold">Capacity</th>
+                <th className="text-right py-3 px-4 text-gray-700 font-semibold">Entropy (bits)</th>
                 <th className="text-right py-3 px-4 text-gray-700 font-semibold">Utilization</th>
                 <th className="text-right py-3 px-4 text-gray-700 font-semibold">Population</th>
               </tr>
@@ -293,9 +299,13 @@ export function ArrondissementAnalysis() {
                     </div>
                   </td>
                   <td className="py-3 px-4 text-center text-gray-900">{commune.stations}</td>
-                  <td className="py-3 px-4 text-right text-gray-900">{commune.bikes.toLocaleString()}</td>
+                  <td className="py-3 px-4 text-right text-gray-900 font-semibold text-blue-600">{commune.bikes.toLocaleString()}</td>
                   <td className="py-3 px-4 text-right text-gray-900">{commune.docks.toLocaleString()}</td>
-                  <td className="py-3 px-4 text-right text-gray-900">{commune.capacity.toLocaleString()}</td>
+                  <td className="py-3 px-4 text-right">
+                    <Badge className="bg-purple-100 text-purple-700 font-semibold">
+                      {(commune.entropy || 0).toFixed(2)}
+                    </Badge>
+                  </td>
                   <td className="py-3 px-4 text-right">
                     <Badge variant={commune.utilization > 50 ? 'default' : 'secondary'}>
                       {commune.utilization.toFixed(1)}%

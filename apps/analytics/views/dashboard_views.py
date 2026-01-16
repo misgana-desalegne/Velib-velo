@@ -15,12 +15,16 @@ def live_dashboard(request):
     """
     Get live dashboard statistics.
     
-    GET /api/dashboard/live/
+    GET /api/dashboard/live/?commune_code=75056
+    
+    Query Parameters:
+        commune_code: Optional INSEE commune code (e.g., '75056' for Paris)
     
     Returns:
         Response: Live dashboard data including stations, bikes, trips, etc.
     """
-    data = AnalyticsService.get_live_dashboard_stats()
+    commune_code = request.query_params.get('commune_code', None)
+    data = AnalyticsService.get_live_dashboard_stats(commune_code=commune_code)
     serializer = LiveDashboardSerializer(data)
     return Response(serializer.data)
 

@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, memo } from 'react';
 import { Card } from '../../shared/ui/card';
 import { Badge } from '../../shared/ui/badge';
 import { Button } from '../../shared/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../shared/ui/select';
 import { Bike, MapPin, AlertCircle, TrendingUp, RefreshCw, Activity, Zap } from 'lucide-react';
 import { LineChart, Line, AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { Progress } from '../../shared/ui/progress';
@@ -53,11 +54,18 @@ export function LiveDashboard() {
   const [lastUpdate, setLastUpdate] = useState(new Date());
   const [hourlyData, setHourlyData] = useState<any[]>([]);
   const [topStations, setTopStations] = useState<any[]>([]);
+  const [communes, setCommunes] = useState<any[]>([]);
+  const [selectedCommune, setSelectedCommune] = useState<string>('all');
 
   const fetchDashboardData = async () => {
     try {
       setError(null);
-      const dashboardData = await api.get(API_ENDPOINTS.liveDashboard);
+      // Add commune filter to API call if selected
+      const url = selectedCommune && selectedCommune !== 'all' 
+        ? `${API_ENDPOINTS.liveDashboard}?commune_code=${selectedCommune}`
+        : API_ENDPOINTS.liveDashboard;
+      
+      const dashboardData = await api.get(url);
       setStats(dashboardData);
       setLastUpdate(new Date());
 
@@ -85,7 +93,7 @@ export function LiveDashboard() {
     fetchDashboardData();
     const interval = setInterval(fetchDashboardData, 30000); // Refresh every 30 seconds
     return () => clearInterval(interval);
-  }, []);
+  }, [selectedCommune]);
 
   const getStatusColor = useMemo(() => (status: string) => {
     switch (status) {
@@ -141,6 +149,21 @@ export function LiveDashboard() {
   const [arrondissementSummary, setArrondissementSummary] = useState<any[]>([]);
   const [criticalStations, setCriticalStations] = useState<any[]>([]);
 
+  // Fetch communes for filtering
+  useEffect(() => {
+    const fetchCommunes = async () => {
+      try {
+        const communesList = await api.get(API_ENDPOINTS.communeList);
+        if (Array.isArray(communesList)) {
+          setCommunes(communesList);
+        }
+      } catch (err) {
+        console.error('Error fetching communes:', err);
+      }
+    };
+    fetchCommunes();
+  }, []);
+
   // Fetch real commune data for arrondissementSummary
   useEffect(() => {
     const fetchCommuneData = async () => {
@@ -159,41 +182,97 @@ export function LiveDashboard() {
     fetchCommuneData();
   }, []);
 
-  // Fetch real station data for critical stations (all stations with low availability or high utilization)
+  // Calculate alert severity based on multiple metrics
+  const calculateAlertSeverity = (utilization: number, entropy: number, flux: number, isGhost: boolean) => {
+    // Ghost stations are always critical
+    if (isGhost) {
+      return { severity: 'critical', issue: '🚨 Ghost Station - Highly Unpredictable' };
+    }
+    
+    // High entropy (> 6 bits) indicates extreme unpredictability
+    if (entropy > 6) {
+      return { severity: 'critical', issue: `📊 Extreme Entropy (${entropy.toFixed(1)} bits) - Unpredictable` };
+    }
+    
+    // High flux volatility (> 10 or < -10 vélos/hour)
+    if (Math.abs(flux) > 10) {
+      const direction = flux > 0 ? '↑' : '↓';
+      return { severity: 'high', issue: `⚡ High Flux Volatility (${direction}${Math.abs(flux).toFixed(1)} v/h)` };
+    }
+    
+    // Very low availability (critical)
+    if (utilization < 0.1) {
+      return { severity: 'critical', issue: '📍 Critical Stock - Very Low Availability' };
+    }
+    
+    // Low availability (high)
+    if (utilization < 0.2) {
+      return { severity: 'high', issue: '📍 Low Stock - Limited Availability' };
+    }
+    
+    // High utilization/occupancy
+    if (utilization > 0.9) {
+      return { severity: 'warning', issue: '📈 Nearly Full - High Utilization' };
+    }
+    
+    // No alert
+    return { severity: null, issue: null };
+  };
+
+  // Fetch real station data for critical stations with analytics metrics
   useEffect(() => {
     const fetchCriticalStations = async () => {
       try {
-        // Fetch all stations to find ALL critical ones
-        const stations = await api.get(`${API_ENDPOINTS.stations}?limit=1000`);
-        if (stations && stations.results) {
-          const critical = stations.results
-            .map((s: any) => {
-              // Use mechanical + ebike since numbikesavailable is always 0
-              const bikes = (s.mechanical || 0) + (s.ebike || 0);
-              const capacity = s.capacity || 1;
-              const utilization = (bikes / capacity);
-              
-              return {
-                name: s.name || s.stationcode || `Station ${s.id}`,
-                commune: s.commune_name || `Zone ${s.id}`,
-                bikes: bikes,
-                docks: capacity - bikes, // Remaining capacity
-                capacity: capacity,
-                utilization: Math.round(utilization * 100),
-                severity: utilization < 0.1 ? 'critical' : (utilization < 0.2 ? 'high' : (utilization > 0.9 ? 'warning' : null)),
-                issue: utilization < 0.1 ? 'Very Low availability' : (utilization < 0.2 ? 'Low availability' : (utilization > 0.9 ? 'High utilization (80%+)' : null)),
-              };
-            })
-            .filter((s: any) => s.severity !== null)
-            .sort((a: any, b: any) => {
-              // Sort by severity: critical > high > warning
-              const severityOrder = { critical: 0, high: 1, warning: 2 };
-              const aOrder = severityOrder[a.severity as keyof typeof severityOrder];
-              const bOrder = severityOrder[b.severity as keyof typeof severityOrder];
-              return aOrder - bOrder;
-            });
+        // Fetch today's analytics data with entropy and flux metrics
+        const analytics = await api.get(`${API_ENDPOINTS.analytics}?limit=1000`);
+        if (analytics && analytics.results) {
+          const analyticsMap = new Map(
+            analytics.results.map((a: any) => [a.station, a])
+          );
           
-          setCriticalStations(critical);
+          // Fetch all stations to get real-time availability
+          const stations = await api.get(`${API_ENDPOINTS.stations}?limit=1000`);
+          if (stations && stations.results) {
+            const critical = stations.results
+              .map((s: any) => {
+                // Use mechanical + ebike since numbikesavailable is always 0
+                const bikes = (s.mechanical || 0) + (s.ebike || 0);
+                const capacity = s.capacity || 1;
+                const utilization = bikes / capacity;
+                
+                // Get analytics data for this station
+                const analyticsData = analyticsMap.get(s.id) as any;
+                const entropy = analyticsData ? (analyticsData.shannon_entropy || 0) : 0;
+                const flux = analyticsData ? (analyticsData.net_flux || 0) : 0;
+                const isGhost = s.profile === 'ghost_station' || (analyticsData ? analyticsData.is_ghost : false) || false;
+                
+                const { severity, issue } = calculateAlertSeverity(utilization, entropy, flux, isGhost);
+                
+                return {
+                  name: s.name || s.stationcode || `Station ${s.id}`,
+                  commune: s.commune_name || `Zone ${s.id}`,
+                  bikes: bikes,
+                  docks: capacity - bikes,
+                  capacity: capacity,
+                  utilization: Math.round(utilization * 100),
+                  profile: s.profile,
+                  entropy: entropy,
+                  flux: flux,
+                  severity: severity,
+                  issue: issue,
+                };
+              })
+              .filter((s: any) => s.severity !== null)
+              .sort((a: any, b: any) => {
+                // Sort by severity: critical > high > warning
+                const severityOrder = { critical: 0, high: 1, warning: 2 };
+                const aOrder = severityOrder[a.severity as keyof typeof severityOrder];
+                const bOrder = severityOrder[b.severity as keyof typeof severityOrder];
+                return aOrder - bOrder;
+              });
+            
+            setCriticalStations(critical);
+          }
         }
       } catch (err) {
         console.error('Error fetching critical stations:', err);
@@ -255,6 +334,34 @@ export function LiveDashboard() {
       </div>
 
       <div className="px-8 py-8">
+
+      {/* Commune Filter */}
+      <Card className="p-6 mb-8 border-0 shadow-md">
+        <div className="flex items-center gap-4">
+          <div className="flex-1 max-w-xs">
+            <label className="block text-sm font-semibold text-gray-700 mb-2">Filtrer par Commune</label>
+            <Select value={selectedCommune} onValueChange={setSelectedCommune}>
+              <SelectTrigger className="border border-gray-300">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Toutes les Communes</SelectItem>
+                {communes.map((commune: any) => (
+                  <SelectItem key={commune.code} value={commune.code}>
+                    {commune.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="pt-6">
+            <Button onClick={refreshData} className="bg-blue-600 hover:bg-blue-700 text-white font-semibold">
+              <RefreshCw className="w-4 h-4 mr-2" />
+              Actualiser
+            </Button>
+          </div>
+        </div>
+      </Card>
 
       {/* Live Metrics Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-5 mb-10">
@@ -449,6 +556,8 @@ export function LiveDashboard() {
                         <span className="text-xs bg-white/50 px-2 py-1 rounded font-medium">🚲 {station.bikes}</span>
                         <span className="text-xs bg-white/50 px-2 py-1 rounded font-medium">📍 {station.docks}</span>
                         <span className="text-xs bg-white/50 px-2 py-1 rounded font-bold">{station.utilization}%</span>
+                        {station.entropy > 0 && <span className="text-xs bg-white/50 px-2 py-1 rounded font-medium">📊 {station.entropy.toFixed(2)} bits</span>}
+                        {station.flux !== 0 && <span className="text-xs bg-white/50 px-2 py-1 rounded font-medium">⚡ {station.flux > 0 ? '+' : ''}{station.flux.toFixed(1)} v/h</span>}
                       </div>
                     </div>
                   </div>

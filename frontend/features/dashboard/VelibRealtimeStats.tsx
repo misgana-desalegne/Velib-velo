@@ -457,7 +457,10 @@ export function VelibRealtimeStats() {
                   </div>
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-2">Métrique</label>
-                    <Select value={metric} onValueChange={(v: string) => setMetric(v as MetricKey)}>
+                    <Select
+                      value={metric}
+                      onValueChange={(v: string) => setMetric(v as MetricKey)}
+                    >
                       <SelectTrigger className="w-full md:w-40">
                         <SelectValue />
                       </SelectTrigger>

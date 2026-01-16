@@ -201,7 +201,10 @@ export const VeloLogin: React.FC<VeloLoginProps> = ({ onNavigate, onLogin }) => 
             marginBottom: '40px',
             fontSize: '1.05rem'
           }}>
-            Connectez-vous pour accéder à votre tableau de bord
+            Connectez-vous pour accéder à votre tableau de bord Vélo.<br />
+            Test email:- admin@example.com <br />
+            Test password:- admin
+
           </p>
 
           <form onSubmit={handleSubmit}>

@@ -4,8 +4,8 @@ This service handles complex operations related to communes.
 """
 from django.utils import timezone
 from datetime import timedelta
-from django.db.models import Max
-from ..models import Commune, BikeStation, StationStatus
+from django.db.models import Max, Avg
+from ..models import Commune, BikeStation, StationStatus, DailyAnalytics
 
 
 class CommuneService:
@@ -20,7 +20,7 @@ class CommuneService:
             commune: Commune instance
             
         Returns:
-            dict: Analytics data including stations, bikes, etc.
+            dict: Analytics data including stations, bikes, entropy, etc.
         """
         # Get stations in this commune
         stations = BikeStation.objects.filter(commune=commune)
@@ -61,6 +61,18 @@ class CommuneService:
             # Fallback to capacity-based calculation if no dock data available
             avg_utilization = round(min((total_bikes / total_capacity) * 100, 100), 2)
         
+        # Calculate average entropy from daily analytics
+        today = timezone.now().date()
+        daily_analytics = DailyAnalytics.objects.filter(
+            station__commune=commune,
+            date=today
+        )
+        
+        avg_entropy = 0
+        if daily_analytics.exists():
+            entropy_data = daily_analytics.aggregate(Avg('shannon_entropy'))
+            avg_entropy = round(entropy_data['shannon_entropy__avg'] or 0, 2)
+        
         return {
             'code': commune.code,
             'name': commune.name,
@@ -69,13 +81,14 @@ class CommuneService:
             'docks': total_docks,
             'capacity': total_capacity,
             'utilization': avg_utilization,
+            'entropy': avg_entropy,
             'population': commune.population,
         }
     
     @staticmethod
     def get_all_communes_summary():
         """
-        Get summary analytics for all communes.
+        Get summary analytics for all communes, sorted by entropy.
         
         Returns:
             list: List of analytics data for each commune
@@ -88,6 +101,6 @@ class CommuneService:
             if analytics['stations'] > 0:  # Only include communes with stations
                 results.append(analytics)
         
-        # Sort by utilization descending
-        results.sort(key=lambda x: x['utilization'], reverse=True)
+        # Sort by entropy descending (highest entropy first = most dynamic/unpredictable)
+        results.sort(key=lambda x: x['entropy'], reverse=True)
         return results

@@ -12,21 +12,31 @@ class AnalyticsService:
     """Service class for Analytics and Dashboard business logic"""
     
     @staticmethod
-    def get_live_dashboard_stats():
+    def get_live_dashboard_stats(commune_code=None):
         """
         Calculate live dashboard statistics.
+        
+        Args:
+            commune_code: Optional commune code to filter by (e.g., '75056' for Paris)
         
         Returns:
             dict: Dashboard statistics including stations, bikes, docks, etc.
         """
+        # Get stations based on commune filter
+        if commune_code:
+            stations = BikeStation.objects.filter(commune__code=commune_code)
+        else:
+            stations = BikeStation.objects.all()
+        
         # Get all stations count
-        total_stations = BikeStation.objects.count()
-        active_stations = BikeStation.objects.filter(is_installed=True).count()
+        total_stations = stations.count()
+        active_stations = stations.filter(is_installed=True).count()
         
         # Get latest status for each station (most recent record)
         from django.db.models import Max, F
         
         latest_statuses = StationStatus.objects.filter(
+            station__in=stations,
             station__is_installed=True
         ).values('station').annotate(
             max_timestamp=Max('timestamp')
