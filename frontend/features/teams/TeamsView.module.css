@@ -1,7 +1,7 @@
 /* Container and Layout */
 .container {
   width: 100%;
-  background: linear-gradient(180deg, #f8fafc 0%, #ffffff 50%, #f8fafc 100%);
+  background: #ffffff;
   min-height: 100vh;
   padding-top: 2.5rem;
   padding-bottom: 3rem;
@@ -79,7 +79,7 @@
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  background: linear-gradient(135deg, #1fa971 0%, #06b6d4 100%);
+  background: #2563eb;
   color: white;
   padding: 0.75rem 1.5rem;
   border-radius: 0.75rem;
@@ -93,7 +93,7 @@
 
 .addButton:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(31, 169, 113, 0.4);
+  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.4);
 }
 
 .addButtonIcon {
@@ -141,7 +141,7 @@
 
 .cardGradientBar {
   height: 4px;
-  background: linear-gradient(90deg, #1fa971 0%, #06b6d4 50%, #ec4899 100%);
+  background: #16a34a;
   width: 100%;
 }
 
@@ -163,7 +163,7 @@
   border: 3px solid transparent;
   background-clip: padding-box;
   padding: 6px;
-  background-image: linear-gradient(135deg, #1fa971 0%, #06b6d4 100%);
+  background-color: #2563eb;
   background-origin: border-box;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
 }
@@ -182,7 +182,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #dbeafe 0%, #e0f2fe 100%);
+  background: #dbeafe;
   font-size: 3rem;
   font-weight: 700;
   color: #1e40af;
@@ -324,7 +324,7 @@
   align-items: center;
   gap: 1rem;
   padding: 1rem;
-  background: linear-gradient(135deg, #fef2f2 0%, #fff7ed 100%);
+  background: #fef2f2;
   border-radius: 1.5rem;
   backdrop-filter: blur(4px);
   animation: slideUp 0.3s ease;
@@ -524,7 +524,7 @@
   align-items: center;
   justify-content: center;
   padding: 0.75rem 1rem;
-  background: linear-gradient(135deg, #dbeafe 0%, #e0f2fe 100%);
+  background: #dbeafe;
   color: #1e40af;
   border: 1px solid #93c5fd;
   border-radius: 0.75rem;
@@ -536,7 +536,7 @@
 }
 
 .imageUploadButton:hover {
-  background: linear-gradient(135deg, #bfdbfe 0%, #cffafe 100%);
+  background: #bfdbfe;
   border-color: #60a5fa;
 }
 
@@ -640,14 +640,14 @@
 }
 
 .saveButton {
-  background: linear-gradient(135deg, #1fa971 0%, #06b6d4 100%);
+  background: #16a34a;
   color: white;
-  box-shadow: 0 4px 12px rgba(31, 169, 113, 0.3);
+  box-shadow: 0 4px 12px rgba(22, 163, 74, 0.3);
 }
 
 .saveButton:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(31, 169, 113, 0.4);
+  box-shadow: 0 6px 16px rgba(22, 163, 74, 0.4);
 }
 
 .saveButton:disabled {

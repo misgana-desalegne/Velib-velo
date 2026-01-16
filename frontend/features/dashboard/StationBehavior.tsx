@@ -65,13 +65,29 @@ export function StationBehavior() {
   const [openExplanation, setOpenExplanation] = useState<string | null>(null);
   const [explanationText, setExplanationText] = useState('');
 
-  // Fetch communes for filtering
+  // Fetch communes that have stations
   useEffect(() => {
     const fetchCommunes = async () => {
       try {
-        const communeList = await api.get(API_ENDPOINTS.communeList);
-        if (Array.isArray(communeList)) {
-          setCommunes(communeList);
+        // Fetch all stations to determine which communes have stations
+        const response = await api.get(`${API_ENDPOINTS.stations}?limit=1000`);
+        if (response && response.results && Array.isArray(response.results)) {
+          // Get unique communes from stations that have commune_code
+          const communeCodesWithStations = new Set(
+            response.results
+              .filter((s: any) => s.commune_code)
+              .map((s: any) => s.commune_code)
+          );
+          
+          // Fetch all communes
+          const communeList = await api.get(API_ENDPOINTS.communeList);
+          if (Array.isArray(communeList)) {
+            // Filter to only show communes that have at least one station
+            const filteredCommunes = communeList.filter((c: any) => 
+              communeCodesWithStations.has(c.code)
+            );
+            setCommunes(filteredCommunes);
+          }
         }
       } catch (err) {
         console.error('Error fetching communes:', err);

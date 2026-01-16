@@ -1,10 +1,12 @@
-import { useState, useMemo, memo, useEffect } from 'react';
+import { useState, useMemo, memo, useEffect, useRef } from 'react';
 import { Card } from '../../shared/ui/card';
 import { Button } from '../../shared/ui/button';
 import { Badge } from '../../shared/ui/badge';
 import { MapPin, Layers, Filter, ZoomIn, ZoomOut, Maximize2, Bike, AlertCircle, X } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../shared/ui/select';
 import { api, API_ENDPOINTS } from '../../api/config';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 
 // Helper function to determine status based on utilization
 const getStatusFromUtilization = (bikes: number, docks: number): string => {
@@ -25,6 +27,8 @@ export function MapAnalysis() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [arrondissements, setArrondissements] = useState<any[]>([]);
+  const mapRef = useRef<any>(null);
+  const markersRef = useRef<any>({});
 
   useEffect(() => {
     const fetchStations = async () => {
@@ -120,6 +124,130 @@ export function MapAnalysis() {
     const profileMatch = filterProfile === 'all' || s.profile === filterProfile;
     return statusMatch && profileMatch;
   });
+
+  // Initialize Leaflet map
+  useEffect(() => {
+    if (!mapRef.current) {
+      // Create map
+      const map = L.map('map-container', {
+        center: [48.8566, 2.3522],
+        zoom: 12,
+        scrollWheelZoom: true
+      });
+
+      // Add OpenStreetMap tiles
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors',
+        maxZoom: 19,
+        minZoom: 10
+      }).addTo(map);
+
+      mapRef.current = map;
+    }
+  }, []);
+
+  // Update markers when filtered stations change
+  useEffect(() => {
+    if (!mapRef.current) return;
+
+    // Clear existing markers
+    Object.values(markersRef.current).forEach((marker: any) => {
+      marker.remove();
+    });
+    markersRef.current = {};
+
+    // Add new markers for filtered stations
+    filteredStations.forEach((station) => {
+      const statusColor = getStatusColor(station.status);
+      const isGhost = station.isGhost;
+      const markerColor = isGhost ? '#9ca3af' : statusColor;
+
+      // Create custom HTML for marker
+      const markerHTML = `
+        <div style="
+          width: 32px;
+          height: 42px;
+          background-color: ${markerColor};
+          border: 3px solid white;
+          border-radius: 50% 50% 50% 0;
+          transform: rotate(-45deg);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+          cursor: pointer;
+          opacity: ${isGhost ? '0.6' : '0.9'};
+        ">
+          <div style="
+            transform: rotate(45deg);
+            color: white;
+            font-size: 16px;
+            font-weight: bold;
+          ">
+            ${isGhost ? '⚠️' : '🚴'}
+          </div>
+        </div>
+      `;
+
+      const icon = L.divIcon({
+        html: markerHTML,
+        iconSize: [32, 42],
+        iconAnchor: [16, 42],
+        popupAnchor: [0, -42],
+        className: 'custom-pin'
+      });
+
+      const popupContent = `
+        <div style="padding: 12px; min-width: 220px; font-family: Arial, sans-serif;">
+          <h4 style="margin: 0 0 8px 0; font-size: 14px; font-weight: bold; color: #1f2937;">
+            ${station.name}
+          </h4>
+          <p style="margin: 0 0 12px 0; font-size: 12px; color: #6b7280;">
+            📍 ${station.arr}
+          </p>
+          <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 8px 0;" />
+          <div style="font-size: 12px; color: #374151; space-y: 8px;">
+            <div style="margin: 8px 0; display: flex; justify-content: space-between;">
+              <span>🚲 Vélos:</span>
+              <strong style="color: #10b981;">${station.bikes}</strong>
+            </div>
+            <div style="margin: 8px 0; display: flex; justify-content: space-between;">
+              <span>📍 Places:</span>
+              <strong style="color: #3b82f6;">${station.docks}</strong>
+            </div>
+            <div style="margin: 8px 0; display: flex; justify-content: space-between;">
+              <span>⚙️ Capacité:</span>
+              <strong>${station.capacity}</strong>
+            </div>
+          </div>
+          <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 8px 0;" />
+          <div style="margin: 8px 0; display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-weight: bold;">Occupation:</span>
+            <strong style="font-size: 14px;">${Math.round((station.bikes / station.capacity) * 100)}%</strong>
+          </div>
+          <div style="margin: 8px 0; background-color: #f3f4f6; border-radius: 4px; height: 8px; overflow: hidden;">
+            <div style="
+              height: 100%;
+              width: ${(station.bikes / station.capacity) * 100}%;
+              background-color: ${markerColor};
+              transition: width 0.3s;
+            "></div>
+          </div>
+          ${isGhost ? '<div style="margin-top: 12px; padding: 8px; background-color: #fee2e2; border: 1px solid #fca5a5; border-radius: 4px; color: #991b1b; font-weight: bold; font-size: 11px;">⚠️ Station Fantôme - Comportement Imprévisible</div>' : ''}
+          <div style="margin-top: 12px; padding: 8px; background-color: ${station.status === 'high' ? '#dcfce7' : station.status === 'medium' ? '#fef3c7' : '#fee2e2'}; border-radius: 4px; text-align: center; font-weight: bold; font-size: 12px; color: ${station.status === 'high' ? '#166534' : station.status === 'medium' ? '#92400e' : '#991b1b'};">
+            État: ${station.status === 'high' ? '✅ Haute Disponibilité' : station.status === 'medium' ? '⚠️ Disponibilité Moyenne' : '❌ Basse Disponibilité'}
+          </div>
+        </div>
+      `;
+
+      const marker = L.marker([station.lat, station.lng], { icon })
+        .bindPopup(popupContent, { maxWidth: 280 })
+        .addTo(mapRef.current)
+        .on('click', () => setSelectedStation(station.id));
+
+      markersRef.current[station.id] = marker;
+    });
+  }, [filteredStations]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100">
@@ -232,121 +360,15 @@ export function MapAnalysis() {
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mt-6">
         {/* Map */}
         <Card className="p-0 lg:col-span-3 overflow-hidden border-0 shadow-lg">
-          <div className="relative bg-gradient-to-br from-blue-100 to-green-100 h-[600px]">
-            {/* SVG Interactive Map */}
-            <svg width="100%" height="100%" viewBox="0 0 800 600" className="absolute inset-0 bg-gradient-to-br from-blue-50 via-cyan-50 to-green-50">
-              <defs>
-                <radialGradient id="heatmap" cx="50%" cy="50%" r="50%">
-                  <stop offset="0%" stopColor="#ef4444" stopOpacity="0.3"/>
-                  <stop offset="50%" stopColor="#f59e0b" stopOpacity="0.2"/>
-                  <stop offset="100%" stopColor="#10b981" stopOpacity="0.1"/>
-                </radialGradient>
-              </defs>
-              
-              {/* Paris area outline with gradient */}
-              <circle cx="400" cy="300" r="200" fill="none" stroke="#3b82f6" strokeWidth="3" opacity="0.2" />
-              <circle cx="400" cy="300" r="150" fill="none" stroke="#06b6d4" strokeWidth="2" opacity="0.15" />
-              
-              {/* Station markers with enhanced styling */}
-              {filteredStations.map((station) => {
-                const x = 300 + (station.lng - 2.3) * 500;
-                const y = 300 - (station.lat - 48.85) * 2000;
-                const size = getMarkerSize(station.bikes, station.capacity);
-                const statusColor = getStatusColor(station.status);
-                const isGhost = station.isGhost;
-                const ghostColor = '#9ca3af'; // gray-400
-                const markerColor = isGhost ? ghostColor : statusColor;
-                
-                return (
-                  <g key={station.id} style={{ cursor: 'pointer' }}>
-                    {/* Glow effect */}
-                    <circle
-                      cx={x}
-                      cy={y}
-                      r={size + 6}
-                      fill={markerColor}
-                      opacity={isGhost ? "0.08" : "0.15"}
-                    />
-                    {/* Main marker */}
-                    <circle
-                      cx={x}
-                      cy={y}
-                      r={size}
-                      fill={markerColor}
-                      stroke={isGhost ? "#6b7280" : "white"}
-                      strokeWidth={isGhost ? "1.5" : "2.5"}
-                      strokeDasharray={isGhost ? "3,3" : "none"}
-                      opacity={isGhost ? "0.6" : "0.9"}
-                      onClick={() => setSelectedStation(station.id)}
-                      style={{ transition: 'opacity 0.2s, filter 0.2s' }}
-                      onMouseOver={(e) => { (e.target as SVGCircleElement).style.filter = 'drop-shadow(0 4px 8px rgba(0,0,0,0.3))'; }}
-                      onMouseOut={(e) => { (e.target as SVGCircleElement).style.filter = 'drop-shadow(0 2px 4px rgba(0,0,0,0.1))'; }}
-                    />
-                    {/* Ghost station warning indicator */}
-                    {isGhost && (
-                      <text
-                        x={x}
-                        y={y + 1}
-                        textAnchor="middle"
-                        className="text-xs fill-gray-600"
-                        style={{ fontSize: '10px', fontWeight: 'bold', userSelect: 'none', pointerEvents: 'none' }}
-                      >
-                        ⚠️
-                      </text>
-                    )}
-                    {selectedStation === station.id && (
-                      <>
-                        <circle cx={x} cy={y} r={size + 4} fill="none" stroke={markerColor} strokeWidth="2.5" opacity="0.7" />
-                        <circle cx={x} cy={y} r={size + 8} fill="none" stroke={markerColor} strokeWidth="1.5" opacity="0.4" />
-                      </>
-                    )}
-                    {/* Enhanced popup for selected station */}
-                    {selectedStation === station.id && (
-                      <g>
-                        <defs>
-                          <filter id="popup-shadow">
-                            <feDropShadow dx="0" dy="4" stdDeviation="3" floodOpacity="0.3"/>
-                          </filter>
-                        </defs>
-                        <rect x={x - 75} y={y - 140} width="150" height={isGhost ? "140" : "120"} rx="10" fill="white" stroke={markerColor} strokeWidth="2.5" filter="url(#popup-shadow)" />
-                        <text x={x} y={y - 115} textAnchor="middle" className="text-xs font-bold fill-gray-900" style={{ fontSize: '12px', fontWeight: 'bold', userSelect: 'none' }}>
-                          {station.name.substring(0, 20)}
-                        </text>
-                        <text x={x} y={y - 98} textAnchor="middle" className="text-xs fill-gray-600" style={{ fontSize: '10px', userSelect: 'none' }}>
-                          {station.arr}
-                        </text>
-                        <line x1={x - 65} y1={y - 90} x2={x + 65} y2={y - 90} stroke="#e5e7eb" strokeWidth="1" />
-                        <text x={x} y={y - 75} textAnchor="middle" className="text-xs font-bold fill-green-600" style={{ fontSize: '11px', fontWeight: 'bold', userSelect: 'none' }}>
-                          🚲 {station.bikes} vélos
-                        </text>
-                        <text x={x} y={y - 60} textAnchor="middle" className="text-xs font-bold fill-blue-600" style={{ fontSize: '11px', fontWeight: 'bold', userSelect: 'none' }}>
-                          📍 {station.docks} places
-                        </text>
-                        <text x={x} y={y - 45} textAnchor="middle" className="text-xs fill-gray-600" style={{ fontSize: '9px', userSelect: 'none' }}>
-                          {Math.round((station.bikes / station.capacity) * 100)}% utilisé
-                        </text>
-                        {/* Profile information */}
-                        {isGhost && (
-                          <>
-                            <line x1={x - 65} y1={y - 35} x2={x + 65} y2={y - 35} stroke="#e5e7eb" strokeWidth="1" />
-                            <text x={x} y={y - 22} textAnchor="middle" className="text-xs font-bold fill-red-600" style={{ fontSize: '10px', fontWeight: 'bold', userSelect: 'none' }}>
-                              ⚠️ Station Fantôme
-                            </text>
-                          </>
-                        )}
-                        {/* Close button */}
-                        <g onClick={() => setSelectedStation(null)} style={{ cursor: 'pointer' }}>
-                          <rect x={x + 58} y={y - 138} width="24" height="24" rx="4" fill={markerColor} opacity="0.9" />
-                          <text x={x + 70} y={y - 107} textAnchor="middle" className="text-sm font-bold fill-white" style={{ fontSize: '16px', fontWeight: 'bold', userSelect: 'none' }}>
-                            ×
-                          </text>
-                        </g>
-                      </g>
-                    )}
-                  </g>
-                );
-              })}
-            </svg>
+          <div id="map-container" style={{ height: '600px', width: '100%', borderRadius: '0.5rem' }}>
+            {loading && (
+              <div className="flex items-center justify-center h-full bg-gradient-to-br from-blue-50 to-green-50">
+                <div className="text-center">
+                  <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mb-4 mx-auto"></div>
+                  <p className="text-blue-900 font-semibold">Chargement de la carte...</p>
+                </div>
+              </div>
+            )}
           </div>
         </Card>
 
@@ -466,6 +488,87 @@ export function MapAnalysis() {
             </div>
           </Card>
         </div>
+      </div>
+
+      {/* Stations Table */}
+      <div className="mt-8">
+        <Card className="p-0 border-0 shadow-lg overflow-hidden">
+          <div className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white px-6 py-4">
+            <h3 className="text-lg font-bold flex items-center gap-2">
+              <Bike className="w-5 h-5" />
+              Détail des Stations ({filteredStations.length})
+            </h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-100 border-b-2 border-gray-300">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-bold text-gray-700">Station</th>
+                  <th className="px-6 py-3 text-left text-xs font-bold text-gray-700">Commune</th>
+                  <th className="px-6 py-3 text-center text-xs font-bold text-gray-700">🚲 Vélos</th>
+                  <th className="px-6 py-3 text-center text-xs font-bold text-gray-700">📍 Places</th>
+                  <th className="px-6 py-3 text-center text-xs font-bold text-gray-700">Occupation</th>
+                  <th className="px-6 py-3 text-left text-xs font-bold text-gray-700">État</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredStations.map((station, idx) => (
+                  <tr 
+                    key={station.id} 
+                    className={`border-b border-gray-200 hover:bg-purple-50 transition cursor-pointer ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}
+                    onClick={() => setSelectedStation(station.id)}
+                  >
+                    <td className="px-6 py-4">
+                      <div className="font-semibold text-gray-900">{station.name}</div>
+                      {station.isGhost && <span className="text-xs text-red-600 font-bold">⚠️ Ghost</span>}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-600">{station.arr}</td>
+                    <td className="px-6 py-4 text-center">
+                      <span className="inline-block bg-green-100 text-green-800 px-3 py-1 rounded-full font-bold text-sm">
+                        {station.bikes}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      <span className="inline-block bg-blue-100 text-blue-800 px-3 py-1 rounded-full font-bold text-sm">
+                        {station.docks}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      <div className="flex items-center justify-center gap-2">
+                        <div className="w-16 bg-gray-300 rounded-full h-2 overflow-hidden">
+                          <div 
+                            className="h-2 rounded-full" 
+                            style={{ 
+                              width: `${(station.bikes / station.capacity) * 100}%`,
+                              backgroundColor: getStatusColor(station.status)
+                            }}
+                          />
+                        </div>
+                        <span className="text-sm font-bold text-gray-900 min-w-[40px]">
+                          {Math.round((station.bikes / station.capacity) * 100)}%
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <Badge className={`px-3 py-1 font-bold text-xs ${
+                        station.status === 'high' ? 'bg-gradient-to-r from-green-100 to-emerald-100 text-green-700' :
+                        station.status === 'medium' ? 'bg-gradient-to-r from-yellow-100 to-amber-100 text-yellow-700' :
+                        'bg-gradient-to-r from-red-100 to-pink-100 text-red-700'
+                      }`}>
+                        {station.status === 'high' ? '✅ Haute' : station.status === 'medium' ? '⚠️ Moyenne' : '❌ Basse'}
+                      </Badge>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {filteredStations.length === 0 && (
+              <div className="p-8 text-center text-gray-500">
+                Aucune station ne correspond aux filtres sélectionnés
+              </div>
+            )}
+          </div>
+        </Card>
       </div>
       </div>
     </div>

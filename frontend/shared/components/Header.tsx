@@ -50,9 +50,14 @@ export function Header(props: HeaderProps) {
       <header className="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
         <div className="flex items-center justify-between px-4 py-2">
           {/* Logo and Title */}
-          <div className="flex items-center gap-2">
+          <button
+            onClick={() => onViewChange('live')}
+            className="flex items-center gap-2 hover:opacity-80 transition-opacity cursor-pointer"
+            style={{ background: 'none', border: 'none', padding: 0 }}
+            title="Go to Dashboard"
+          >
             <img src={logo} alt="ParisCycle - Innovative Urban Mobility Logo" style={{ height: '40px', width: 'auto' }} />
-          </div>
+          </button>
 
           {/* Navigation Menu */}
           <nav className="flex items-center gap-2">

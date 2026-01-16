@@ -138,7 +138,7 @@ export default function App() {
   content = (
     <div className="flex flex-col h-screen bg-transparent">
       <Header variant="dashboard" activeView={activeView} onViewChange={setActiveView} onLogout={handleLogout} />
-      <main className="flex-1 overflow-auto">
+      <main className="flex-1 overflow-auto px-6 lg:px-8 mx-4 lg:mx-auto max-w-7xl w-full">
         <Suspense fallback={<LoadingFallback />}>
           {renderView()}
         </Suspense>

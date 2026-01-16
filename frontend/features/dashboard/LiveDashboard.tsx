@@ -50,6 +50,7 @@ MetricCard.displayName = 'MetricCard';
 export function LiveDashboard() {
   const [stats, setStats] = useState<LiveDashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdate, setLastUpdate] = useState(new Date());
   const [hourlyData, setHourlyData] = useState<any[]>([]);
@@ -60,6 +61,7 @@ export function LiveDashboard() {
   const fetchDashboardData = async () => {
     try {
       setError(null);
+      setRefreshing(true);
       // Add commune filter to API call if selected
       const url = selectedCommune && selectedCommune !== 'all' 
         ? `${API_ENDPOINTS.liveDashboard}?commune_code=${selectedCommune}`
@@ -86,6 +88,7 @@ export function LiveDashboard() {
       console.error('Error fetching dashboard data:', err);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
@@ -186,36 +189,52 @@ export function LiveDashboard() {
   const calculateAlertSeverity = (utilization: number, entropy: number, flux: number, isGhost: boolean) => {
     // Ghost stations are always critical
     if (isGhost) {
-      return { severity: 'critical', issue: '🚨 Ghost Station - Highly Unpredictable' };
+      return { severity: 'critical', issue: '🚨 Ghost Station - Highly Unpredictable Behavior' };
     }
     
-    // High entropy (> 6 bits) indicates extreme unpredictability
+    // CRITICAL: No bikes at all (completely empty)
+    if (utilization < 0.01) {
+      return { severity: 'critical', issue: '🚨 No Bikes Available - Station Empty' };
+    }
+    
+    // CRITICAL: Predictably empty (no bikes AND low entropy - consistently unavailable)
+    if (utilization < 0.05 && entropy < 2) {
+      return { severity: 'critical', issue: `📍 Consistently Empty (${entropy.toFixed(1)} bits) - Unreliable` };
+    }
+    
+    // HIGH: Very low availability with low activity (problematic station)
+    if (utilization < 0.1 && entropy < 4) {
+      return { severity: 'high', issue: `📍 Low Stock & Low Activity (${entropy.toFixed(1)} bits entropy)` };
+    }
+    
+    // HIGH: Very low availability but high activity (in demand)
+    if (utilization < 0.1 && entropy >= 4) {
+      return { severity: 'high', issue: `🔥 Popular Station - Low Availability (${entropy.toFixed(1)} bits entropy)` };
+    }
+    
+    // POSITIVE: High entropy (> 6 bits) = High activity & variability = Good usage
+    // This is NOT an alert - it's healthy station activity
     if (entropy > 6) {
-      return { severity: 'critical', issue: `📊 Extreme Entropy (${entropy.toFixed(1)} bits) - Unpredictable` };
+      return { severity: null, issue: null }; // No alert - high activity is good!
     }
     
-    // High flux volatility (> 10 or < -10 vélos/hour)
+    // POSITIVE: High flux (> 10 vélos/hour) = High turnover = Active station
+    // This is NOT an alert - it indicates busy station
     if (Math.abs(flux) > 10) {
-      const direction = flux > 0 ? '↑' : '↓';
-      return { severity: 'high', issue: `⚡ High Flux Volatility (${direction}${Math.abs(flux).toFixed(1)} v/h)` };
+      return { severity: null, issue: null }; // No alert - high turnover is healthy
     }
     
-    // Very low availability (critical)
-    if (utilization < 0.1) {
-      return { severity: 'critical', issue: '📍 Critical Stock - Very Low Availability' };
+    // WARNING: Low availability (< 20%) with stable/low activity
+    if (utilization < 0.2 && entropy < 4) {
+      return { severity: 'warning', issue: '📍 Low Stock - Limited Availability' };
     }
     
-    // Low availability (high)
-    if (utilization < 0.2) {
-      return { severity: 'high', issue: '📍 Low Stock - Limited Availability' };
-    }
-    
-    // High utilization/occupancy
-    if (utilization > 0.9) {
+    // WARNING: High utilization/occupancy (> 85%)
+    if (utilization > 0.85) {
       return { severity: 'warning', issue: '📈 Nearly Full - High Utilization' };
     }
     
-    // No alert
+    // No alert - station is functioning normally
     return { severity: null, issue: null };
   };
 
@@ -314,7 +333,7 @@ export function LiveDashboard() {
       <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-8 pt-8 pb-12">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h2 className="text-4xl font-bold mb-2 flex items-center gap-3">
+            <h2 className="text-4xl font-bold mb-2 flex items-center gap-3 text-blue-200">
               <Activity className="w-8 h-8" />
               Analyse des Stations en Direct
             </h2>
@@ -325,23 +344,23 @@ export function LiveDashboard() {
               <p className="text-sm text-blue-100">Dernière mise à jour</p>
               <p className="text-sm font-semibold">{formattedTime}</p>
             </div>
-            <Button onClick={refreshData} className="bg-white text-blue-600 hover:bg-blue-50 font-semibold">
-              <RefreshCw className="w-4 h-4 mr-2" />
-              Actualiser
+            <Button onClick={refreshData} disabled={refreshing} className="bg-white text-blue-600 hover:bg-blue-50 font-semibold disabled:opacity-50">
+              <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
+              {refreshing ? 'Actualisation...' : 'Actualiser'}
             </Button>
           </div>
         </div>
       </div>
 
-      <div className="px-8 py-8">
+      <div className="px-4 py-4 space-y-4">
 
       {/* Commune Filter */}
-      <Card className="p-6 mb-8 border-0 shadow-md">
-        <div className="flex items-center gap-4">
+      <Card className="p-4 border-0 shadow-md">
+        <div className="flex items-center gap-3">
           <div className="flex-1 max-w-xs">
-            <label className="block text-sm font-semibold text-gray-700 mb-2">Filtrer par Commune</label>
+            <label className="block text-xs font-semibold text-gray-100 mb-1">Filtrer par Commune</label>
             <Select value={selectedCommune} onValueChange={setSelectedCommune}>
-              <SelectTrigger className="border border-gray-300">
+              <SelectTrigger className="border border-gray-100 h-5">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -354,38 +373,38 @@ export function LiveDashboard() {
               </SelectContent>
             </Select>
           </div>
-          <div className="pt-6">
-            <Button onClick={refreshData} className="bg-blue-600 hover:bg-blue-700 text-white font-semibold">
-              <RefreshCw className="w-4 h-4 mr-2" />
-              Actualiser
+          <div className="pt-1">
+            <Button onClick={refreshData} disabled={refreshing} className="bg-blue-600 hover:bg-blue-700 text-white font-semibold h-9 disabled:opacity-50">
+              <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
+              {refreshing ? 'Actualisation...' : 'Actualiser'}
             </Button>
           </div>
         </div>
       </Card>
 
       {/* Live Metrics Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-5 mb-10">
-        <Card className="p-6 border-0 shadow-md transition-all duration-300 hover:shadow-lg hover:-translate-y-1 bg-white">
-          <div className="flex items-start justify-between mb-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+        <Card className="p-2 border-0 shadow-md transition-all duration-300 hover:shadow-lg hover:-translate-y-1 bg-white">
+          <div className="flex items-start justify-between mb-3">
             <div className="flex-1">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Total Stations</p>
-              <p className="text-4xl font-bold text-gray-900">{(stats?.total_stations || 0).toLocaleString()}</p>
+              <p className="text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1">Total Stations</p>
+              <p className="text-3xl font-bold text-gray-900">{(stats?.total_stations || 0).toLocaleString()}</p>
             </div>
-            <div className="p-3 rounded-xl bg-blue-100">
-              <MapPin className="w-6 h-6 text-blue-600" />
+            <div className="p-2 rounded-lg bg-blue-100">
+              <MapPin className="w-5 h-5 text-blue-600" />
             </div>
           </div>
           <Badge className="bg-blue-100 text-blue-700 text-xs font-semibold">Opérationnelles</Badge>
         </Card>
 
-        <Card className="p-6 border-0 shadow-md transition-all duration-300 hover:shadow-lg hover:-translate-y-1 bg-white">
-          <div className="flex items-start justify-between mb-4">
+        <Card className="p-4 border-0 shadow-md transition-all duration-300 hover:shadow-lg hover:-translate-y-1 bg-white">
+          <div className="flex items-start justify-between mb-3">
             <div className="flex-1">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Vélos Disponibles</p>
-              <p className="text-4xl font-bold text-gray-900">{(stats?.total_bikes || 0).toLocaleString()}</p>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Vélos Disponibles</p>
+              <p className="text-3xl font-bold text-gray-900">{(stats?.total_bikes || 0).toLocaleString()}</p>
             </div>
-            <div className="p-3 rounded-xl bg-green-100">
-              <Bike className="w-6 h-6 text-green-600" />
+            <div className="p-2 rounded-lg bg-green-100">
+              <Bike className="w-5 h-5 text-green-600" />
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -394,40 +413,40 @@ export function LiveDashboard() {
           </div>
         </Card>
 
-        <Card className="p-6 border-0 shadow-md transition-all duration-300 hover:shadow-lg hover:-translate-y-1 bg-white">
-          <div className="flex items-start justify-between mb-4">
+        <Card className="p-4 border-0 shadow-md transition-all duration-300 hover:shadow-lg hover:-translate-y-1 bg-white">
+          <div className="flex items-start justify-between mb-3">
             <div className="flex-1">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Places Disponibles</p>
-              <p className="text-4xl font-bold text-gray-900">{(stats?.total_docks || 0).toLocaleString()}</p>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Places Disponibles</p>
+              <p className="text-3xl font-bold text-gray-900">{(stats?.total_docks || 0).toLocaleString()}</p>
             </div>
-            <div className="p-3 rounded-xl bg-purple-100">
-              <Zap className="w-6 h-6 text-purple-600" />
+            <div className="p-2 rounded-lg bg-purple-100">
+              <Zap className="w-5 h-5 text-purple-600" />
             </div>
           </div>
           <p className="text-xs font-semibold text-gray-600">Capacité restante</p>
         </Card>
 
-        <Card className="p-6 border-0 shadow-md transition-all duration-300 hover:shadow-lg hover:-translate-y-1 bg-white">
-          <div className="flex items-start justify-between mb-4">
+        <Card className="p-4 border-0 shadow-md transition-all duration-300 hover:shadow-lg hover:-translate-y-1 bg-white">
+          <div className="flex items-start justify-between mb-3">
             <div className="flex-1">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Utilisation Moyenne</p>
-              <p className="text-4xl font-bold text-gray-900">{((stats?.avg_utilization || 0) * 100).toFixed(1)}%</p>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Utilisation Moyenne</p>
+              <p className="text-3xl font-bold text-gray-900">{((stats?.avg_utilization || 0) * 100).toFixed(1)}%</p>
             </div>
-            <div className="p-3 rounded-xl bg-orange-100">
-              <TrendingUp className="w-6 h-6 text-orange-600" />
+            <div className="p-2 rounded-lg bg-orange-100">
+              <TrendingUp className="w-5 h-5 text-orange-600" />
             </div>
           </div>
           <Progress value={(stats?.avg_utilization || 0) * 100} className="h-2" />
         </Card>
 
-        <Card className="p-6 border-0 shadow-md transition-all duration-300 hover:shadow-lg hover:-translate-y-1 bg-white">
-          <div className="flex items-start justify-between mb-4">
+        <Card className="p-4 border-0 shadow-md transition-all duration-300 hover:shadow-lg hover:-translate-y-1 bg-white">
+          <div className="flex items-start justify-between mb-3">
             <div className="flex-1">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Stations Actives</p>
-              <p className="text-4xl font-bold text-gray-900">{(stats?.active_stations || 0).toLocaleString()}</p>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Stations Actives</p>
+              <p className="text-3xl font-bold text-gray-900">{(stats?.active_stations || 0).toLocaleString()}</p>
             </div>
-            <div className="p-3 rounded-xl bg-emerald-100">
-              <Activity className="w-6 h-6 text-emerald-600" />
+            <div className="p-2 rounded-lg bg-emerald-100">
+              <Activity className="w-5 h-5 text-emerald-600" />
             </div>
           </div>
           <p className="text-xs font-semibold text-gray-600">En service</p>
@@ -435,7 +454,7 @@ export function LiveDashboard() {
       </div>
 
       {/* Charts Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-10">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Hourly Availability */}
         <Card className="p-6 border-0 shadow-md">
           <h3 className="text-lg font-bold text-gray-900 mb-5">Tendance 24h</h3>
@@ -454,7 +473,7 @@ export function LiveDashboard() {
               <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
               <XAxis dataKey="hour" stroke="#6b7280" />
               <YAxis stroke="#6b7280" />
-              <Tooltip contentStyle={{ backgroundColor: '#1f2937', border: 'none', borderRadius: '8px', color: '#fff' }} />
+              <Tooltip contentStyle={{ backgroundColor: '#0366f0', border: 'none', borderRadius: '8px', color: '#fff' }} />
               <Legend wrapperStyle={{ paddingTop: '20px' }} />
               <Area type="monotone" dataKey="bikes" stackId="1" stroke="#10b981" fillOpacity={1} fill="url(#colorBikes)" name="Vélos" />
               <Area type="monotone" dataKey="docks" stackId="2" stroke="#3b82f6" fillOpacity={1} fill="url(#colorDocks)" name="Places" />
@@ -505,7 +524,7 @@ export function LiveDashboard() {
       </div>
 
       {/* Critical Alerts Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Critical Alerts Column */}
         <Card className="p-6 border-0 shadow-md">
           <div className="flex items-center justify-between mb-5">
