@@ -16,7 +16,7 @@ class BikeStationViewSet(viewsets.ModelViewSet):
     ViewSet for BikeStation model.
     Provides CRUD operations and status history for bike stations.
     """
-    queryset = BikeStation.objects.select_related('arrondissement').all()
+    queryset = BikeStation.objects.select_related('commune').all()
     serializer_class = BikeStationSerializer
     
     def get_queryset(self):

@@ -4,9 +4,14 @@ import backgroundVideo from '@/assets/background video.mp4';
 
 type BackgroundShellProps = {
   children: ReactNode;
+  showBackground?: boolean;
 };
 
-export function BackgroundShell({ children }: BackgroundShellProps) {
+export function BackgroundShell({ children, showBackground = true }: BackgroundShellProps) {
+  if (!showBackground) {
+    return <div className={styles.contentOnly}>{children}</div>;
+  }
+
   return (
     <div className={styles.shell}>
       <video autoPlay loop muted playsInline className={styles.backgroundVideo}>

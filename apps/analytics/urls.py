@@ -3,7 +3,7 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     CommuneViewSet, BikeStationViewSet, StationStatusViewSet,
     DailyAnalyticsViewSet, AnalyticsViewSet, StationProfileViewSet,
-    live_dashboard, commune_summary
+    live_dashboard, commune_summary, commune_list
 )
 from .auth_views import RegisterView, LoginView, LogoutView, CurrentUserView
 
@@ -19,6 +19,7 @@ urlpatterns = [
     path('', include(router.urls)),
     path('dashboard/live/', live_dashboard, name='live-dashboard'),
     path('dashboard/communes/', commune_summary, name='commune-summary'),
+    path('dashboard/communes-list/', commune_list, name='communes-list'),
     
     # Authentication endpoints
     path('auth/register/', RegisterView.as_view(), name='auth-register'),

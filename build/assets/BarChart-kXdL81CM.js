@@ -1,0 +1,1 @@
+import{_ as a,s,X as i,Y as t,$ as e}from"./index-drs7_ZcO.js";var x=a({chartName:"BarChart",GraphicalChild:s,defaultTooltipEventType:"axis",validateTooltipEventTypes:["axis","item"],axisComponents:[{axisType:"xAxis",AxisComp:i},{axisType:"yAxis",AxisComp:t}],formatAxisMap:e});export{x as B};

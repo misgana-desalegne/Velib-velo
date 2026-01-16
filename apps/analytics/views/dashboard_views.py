@@ -5,7 +5,8 @@ Handles HTTP requests for dashboard endpoints and summary data.
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
-from ..serializers import LiveDashboardSerializer, CommuneAnalyticsSerializer
+from ..models import Commune
+from ..serializers import LiveDashboardSerializer, CommuneAnalyticsSerializer, CommuneSerializer
 from ..services import AnalyticsService, CommuneService
 
 
@@ -21,6 +22,21 @@ def live_dashboard(request):
     """
     data = AnalyticsService.get_live_dashboard_stats()
     serializer = LiveDashboardSerializer(data)
+    return Response(serializer.data)
+
+
+@api_view(['GET'])
+def commune_list(request):
+    """
+    Get list of all communes for filtering.
+    
+    GET /api/dashboard/communes-list/
+    
+    Returns:
+        Response: Simple list of communes with code and name
+    """
+    communes = Commune.objects.all().order_by('name')
+    serializer = CommuneSerializer(communes, many=True)
     return Response(serializer.data)
 
 

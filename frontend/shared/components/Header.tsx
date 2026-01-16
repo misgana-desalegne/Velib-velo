@@ -40,7 +40,7 @@ export function Header(props: HeaderProps) {
     const menuItems = [
       { id: 'live', label: 'Analyse en Direct', icon: Activity },
       { id: 'behavior', label: 'Comportement des Stations', icon: TrendingUp },
-      { id: 'arrondissement', label: 'Par Arrondissement', icon: Building2 },
+      { id: 'arrondissement', label: 'Par Commune', icon: Building2 },
       { id: 'map', label: 'Vue Cartographique', icon: Map },
       { id: 'velib', label: 'Vélib Temps Réel', icon: Bike },
       { id: 'teams', label: 'Équipe', icon: Users },
@@ -244,8 +244,8 @@ export function Header(props: HeaderProps) {
                   onClick={() => onNavigate('register')}
                   style={{
                     color: '#fff',
-                    backgroundColor: '#ef4135',
-                    border: '2px solid #ef4135',
+                    backgroundColor: '#159205',
+                    border: '2px solid #ef9b35',
                     fontWeight: '600',
                     fontFamily: 'Arial, sans-serif',
                     padding: '10px 18px',
@@ -257,11 +257,11 @@ export function Header(props: HeaderProps) {
                     lineHeight: '1'
                   }}
                   onMouseOver={(e) => {
-                    e.currentTarget.style.backgroundColor = '#d83a2d';
+                    e.currentTarget.style.backgroundColor = 'rgb(26, 216, 16)';
                     e.currentTarget.style.boxShadow = '0 5px 15px rgba(239, 65, 53, 0.4)';
                   }}
                   onMouseOut={(e) => {
-                    e.currentTarget.style.backgroundColor = '#ef4135';
+                    e.currentTarget.style.backgroundColor = '#70ef35';
                     e.currentTarget.style.boxShadow = 'none';
                   }}
                 >

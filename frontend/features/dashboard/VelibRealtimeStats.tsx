@@ -1,49 +1,36 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ButtonHTMLAttributes } from 'react';
 import {
-  ArrowDownAZ,
-  ArrowDownUp,
-  ArrowUpAZ,
   Bike,
   Download,
+  MapPin,
   RefreshCw,
   Search,
+  TrendingUp,
+  Zap,
 } from 'lucide-react';
-import { api, API_ENDPOINTS } from '@/api/config';
-import { Button } from '@/shared/ui/button';
-import {
-  Card,
-  CardAction,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/shared/ui/card';
-import { Input } from '@/shared/ui/input';
+import { api, API_ENDPOINTS } from '../../api/config';
+import { Card, CardContent } from '../../shared/ui/card';
+import { Input } from '../../shared/ui/input';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/shared/ui/select';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/ui/tabs';
-import { Progress } from '@/shared/ui/progress';
+} from '../../shared/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../shared/ui/tabs';
 import {
-  ChartContainer,
-  ChartLegend,
-  ChartLegendContent,
-  ChartTooltip,
-  ChartTooltipContent,
-} from '@/shared/ui/chart';
-import * as RechartsPrimitive from 'recharts@2.15.2';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/shared/ui/table';
+  CartesianGrid,
+  Cell,
+  Line,
+  LineChart,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
 
 type VelibTotals = {
   stations: number;
@@ -87,9 +74,10 @@ function formatNumber(value: number) {
 }
 
 function formatPercent(value: number) {
-  return new Intl.NumberFormat('fr-FR', { style: 'percent', maximumFractionDigits: 0 }).format(
-    value,
-  );
+  return new Intl.NumberFormat('fr-FR', {
+    style: 'percent',
+    maximumFractionDigits: 0,
+  }).format(value);
 }
 
 function safeDateMs(value: string | null | undefined): number {
@@ -114,7 +102,10 @@ function toCsv(rows: Record<string, unknown>[]) {
     return str;
   };
 
-  const lines = [keys.join(';'), ...rows.map((row) => keys.map((k) => escapeCell(row[k])).join(';'))];
+  const lines = [
+    keys.join(';'),
+    ...rows.map((row) => keys.map((k) => escapeCell(row[k])).join(';')),
+  ];
   return lines.join('\n');
 }
 
@@ -130,12 +121,56 @@ function downloadText(filename: string, content: string) {
   URL.revokeObjectURL(url);
 }
 
+function cx(...classes: Array<string | false | null | undefined>) {
+  return classes.filter(Boolean).join(' ');
+}
+
+type ButtonVariant = 'default' | 'outline';
+type ButtonSize = 'default' | 'sm';
+
+type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
+  variant?: ButtonVariant;
+  size?: ButtonSize;
+};
+
+function Button({
+  variant = 'default',
+  size = 'default',
+  className,
+  type = 'button',
+  ...props
+}: ButtonProps) {
+  const base =
+    'inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50';
+
+  const variants: Record<ButtonVariant, string> = {
+    default: 'bg-primary text-primary-foreground hover:bg-primary/90',
+    outline:
+      'border border-input bg-background hover:bg-accent hover:text-accent-foreground',
+  };
+
+  const sizes: Record<ButtonSize, string> = {
+    default: 'h-10 px-4 py-2',
+    sm: 'h-9 px-3',
+  };
+
+  return (
+    <button
+      type={type}
+      className={cx(base, variants[variant], sizes[size], className)}
+      {...props}
+    />
+  );
+}
+
 export function VelibRealtimeStats() {
   const [data, setData] = useState<VelibRealtimeResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'zones' | 'explore'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'zones' | 'explore'>(
+    'overview',
+  );
   const [search, setSearch] = useState('');
   const [metric, setMetric] = useState<MetricKey>('bikes_available');
   const [sortDir, setSortDir] = useState<'desc' | 'asc'>('desc');
@@ -176,18 +211,7 @@ export function VelibRealtimeStats() {
     fetchData();
     const id = window.setInterval(fetchData, 30_000);
     return () => window.clearInterval(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  const occupancy = useMemo(() => {
-    const capacity = data?.totals.capacity ?? 0;
-    const bikes = data?.totals.bikes_available ?? 0;
-    const docks = data?.totals.docks_available ?? 0;
-    return {
-      bikesRatio: capacity > 0 ? bikes / capacity : 0,
-      docksRatio: capacity > 0 ? docks / capacity : 0,
-    };
-  }, [data]);
 
   const filteredAreas = useMemo(() => {
     const areas = data?.by_area ?? [];
@@ -212,18 +236,6 @@ export function VelibRealtimeStats() {
     return sortedAreas.slice(0, topN);
   }, [sortedAreas, topN]);
 
-  const chartConfig = useMemo(
-    () => ({
-      bikes_available: { label: 'Vélos', color: '#2563eb' },
-      docks_available: { label: 'Bornes', color: '#7c3aed' },
-      mechanical_available: { label: 'Méca', color: '#0f766e' },
-      ebike_available: { label: 'Élec', color: '#f59e0b' },
-      capacity: { label: 'Capacité', color: '#111827' },
-      stations: { label: 'Stations', color: '#6b7280' },
-    }),
-    [],
-  );
-
   const pieData = useMemo(() => {
     const mech = data?.totals.mechanical_available ?? 0;
     const elec = data?.totals.ebike_available ?? 0;
@@ -244,507 +256,284 @@ export function VelibRealtimeStats() {
   }, [data?.updated_at]);
 
   return (
-    <div className="p-4 md:p-8">
-      <div className="mx-auto max-w-6xl">
-        <Card className="border-white/15 bg-white/92 backdrop-blur-xl shadow-2xl text-red-700 [&_*]:!text-red-700">
-          <CardHeader className="border-b border-white/10">
-            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-              <div className="flex items-start gap-3">
-                <div className="mt-0.5 h-11 w-11 rounded-xl bg-primary/15 flex items-center justify-center border border-white/10">
-                  <Bike className="h-5 w-5 text-primary" />
-                </div>
-                <div>
-                  <CardTitle className="text-xl md:text-2xl font-semibold tracking-tight !text-foreground">
-                    Vélib — Temps réel
-                  </CardTitle>
-                  <CardDescription className="text-sm !text-red-700">
-                    Source: opendata.paris.fr • Mise à jour: {data?.updated_at ?? '—'} ({data ? lastUpdatedLabel : '—'})
-                  </CardDescription>
-                </div>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2">
-                <Button variant="outline" className="gap-2" onClick={fetchData} disabled={loading}>
-                  <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-                  Actualiser
-                </Button>
-
-                <Button
-                  variant="outline"
-                  className="gap-2"
-                  onClick={() => {
-                    const rows = (data?.by_area ?? []).map((a) => ({
-                      zone: a.name,
-                      stations: a.stations,
-                      capacity: a.capacity,
-                      bikes_available: a.bikes_available,
-                      docks_available: a.docks_available,
-                      mechanical_available: a.mechanical_available,
-                      ebike_available: a.ebike_available,
-                    }));
-                    downloadText(`velib-realtime-zones-${new Date().toISOString().slice(0, 10)}.csv`, toCsv(rows));
-                  }}
-                  disabled={!data?.by_area?.length}
-                >
-                  <Download className="w-4 h-4" />
-                  Export CSV
-                </Button>
-              </div>
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100">
+      {/* Header with gradient */}
+      <div className="bg-gradient-to-r from-cyan-600 to-blue-600 text-white px-8 pt-8 pb-12">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between max-w-7xl mx-auto">
+          <div className="flex items-start gap-4">
+            <div className="p-3 bg-white/20 rounded-xl border border-white/30">
+              <Bike className="w-6 h-6 text-white" />
             </div>
-          </CardHeader>
+            <div>
+              <h1 className="text-4xl font-bold mb-2">Vélib — Temps Réel</h1>
+              <p className="text-cyan-100 text-sm">Source: opendata.paris.fr • Mise à jour: {data?.updated_at ?? '—'} ({data ? lastUpdatedLabel : '—'})</p>
+            </div>
+          </div>
 
-          <CardContent className="pt-6">
-            {data?.warning && (
-              <Card className="mb-6 border-amber-200/50 bg-amber-50/80">
-                <CardContent className="pt-6 text-amber-900 text-sm">{data.warning}</CardContent>
-              </Card>
-            )}
+          <div className="flex flex-wrap items-center gap-3">
+            <Button
+              variant="outline"
+              className="gap-2 bg-white text-cyan-600 hover:bg-cyan-50 font-semibold"
+              onClick={fetchData}
+              disabled={loading}
+            >
+              <RefreshCw
+                className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`}
+              />
+              Actualiser
+            </Button>
 
-            {error && (
-              <Card className="mb-6 border-red-200/50 bg-red-50/80">
-                <CardContent className="pt-6 text-red-800 text-sm">{error}</CardContent>
-              </Card>
-            )}
-
-            {loading && !data ? <div className="text-muted-foreground">Chargement…</div> : null}
-
-            {data && (
-              <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)}>
-                <TabsList className="mb-6">
-                  <TabsTrigger value="overview">Aperçu</TabsTrigger>
-                  <TabsTrigger value="zones">Zones</TabsTrigger>
-                  <TabsTrigger value="explore">Explorer</TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="overview">
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                    <Card className="bg-card/60 backdrop-blur">
-                      <CardHeader className="pb-2">
-                        <CardDescription>Stations (installées)</CardDescription>
-                        <CardTitle className="text-2xl">{formatNumber(data.totals.stations)}</CardTitle>
-                      </CardHeader>
-                      <CardContent className="pb-6">
-                        <div className="text-xs text-muted-foreground">Zones: {formatNumber(data.by_area.length)}</div>
-                      </CardContent>
-                    </Card>
-
-                    <Card className="bg-card/60 backdrop-blur">
-                      <CardHeader className="pb-2">
-                        <CardDescription>Capacité totale</CardDescription>
-                        <CardTitle className="text-2xl">{formatNumber(data.totals.capacity)}</CardTitle>
-                      </CardHeader>
-                      <CardContent className="pb-6">
-                        <div className="flex items-center justify-between text-xs text-muted-foreground">
-                          <span>Vélos</span>
-                          <span>{formatPercent(occupancy.bikesRatio)}</span>
-                        </div>
-                        <Progress value={Math.round(occupancy.bikesRatio * 100)} className="mt-2" />
-                      </CardContent>
-                    </Card>
-
-                    <Card className="bg-card/60 backdrop-blur">
-                      <CardHeader className="pb-2">
-                        <CardDescription>Vélos disponibles</CardDescription>
-                        <CardTitle className="text-2xl">{formatNumber(data.totals.bikes_available)}</CardTitle>
-                      </CardHeader>
-                      <CardContent className="pb-6">
-                        <div className="text-xs text-muted-foreground">
-                          Méca: {formatNumber(data.totals.mechanical_available)} • Élec: {formatNumber(data.totals.ebike_available)}
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    <Card className="bg-card/60 backdrop-blur">
-                      <CardHeader className="pb-2">
-                        <CardDescription>Bornes libres</CardDescription>
-                        <CardTitle className="text-2xl">{formatNumber(data.totals.docks_available)}</CardTitle>
-                      </CardHeader>
-                      <CardContent className="pb-6">
-                        <div className="flex items-center justify-between text-xs text-muted-foreground">
-                          <span>Bornes</span>
-                          <span>{formatPercent(occupancy.docksRatio)}</span>
-                        </div>
-                        <Progress value={Math.round(occupancy.docksRatio * 100)} className="mt-2" />
-                      </CardContent>
-                    </Card>
-                  </div>
-
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                    <Card className="lg:col-span-2 bg-white/90 backdrop-blur">
-                      <CardHeader className="border-b border-white/10">
-                        <CardTitle className="text-base">Top zones</CardTitle>
-                        <CardDescription>Classement par vélos disponibles.</CardDescription>
-                        <CardAction className="flex items-center gap-2">
-                          <Button
-                            variant={stackBikesDocks ? 'default' : 'outline'}
-                            size="sm"
-                            onClick={() => setStackBikesDocks((v) => !v)}
-                          >
-                            {stackBikesDocks ? 'Vélos + Bornes' : 'Vélos seulement'}
-                          </Button>
-                        </CardAction>
-                      </CardHeader>
-                      <CardContent className="pt-6">
-                        <ChartContainer
-                          className="aspect-[16/7]"
-                          config={{
-                            bikes_available: chartConfig.bikes_available,
-                            docks_available: chartConfig.docks_available,
-                          }}
-                        >
-                          <RechartsPrimitive.BarChart data={visibleAreas} margin={{ left: 10, right: 10 }}>
-                            <RechartsPrimitive.CartesianGrid vertical={false} />
-                            <RechartsPrimitive.XAxis
-                              dataKey="name"
-                              tickLine={false}
-                              axisLine={false}
-                              interval={0}
-                              angle={-18}
-                              textAnchor="end"
-                              height={60}
-                              tickFormatter={(v: string) => (v.length > 16 ? `${v.slice(0, 16)}…` : v)}
-                            />
-                            <RechartsPrimitive.YAxis tickLine={false} axisLine={false} />
-                            <ChartTooltip content={<ChartTooltipContent />} />
-                            <ChartLegend content={<ChartLegendContent />} />
-                            <RechartsPrimitive.Bar
-                              dataKey="bikes_available"
-                              fill="var(--color-bikes_available)"
-                              radius={[6, 6, 0, 0]}
-                              maxBarSize={42}
-                            />
-                            {stackBikesDocks && (
-                              <RechartsPrimitive.Bar
-                                dataKey="docks_available"
-                                fill="var(--color-docks_available)"
-                                radius={[6, 6, 0, 0]}
-                                maxBarSize={42}
-                              />
-                            )}
-                          </RechartsPrimitive.BarChart>
-                        </ChartContainer>
-                      </CardContent>
-                    </Card>
-
-                    <Card className="bg-white/90 backdrop-blur">
-                      <CardHeader className="border-b border-white/10">
-                        <CardTitle className="text-base">Répartition</CardTitle>
-                        <CardDescription>Mécanique vs Électrique</CardDescription>
-                      </CardHeader>
-                      <CardContent className="pt-6">
-                        <ChartContainer
-                          className="aspect-square"
-                          config={{
-                            mechanical_available: chartConfig.mechanical_available,
-                            ebike_available: chartConfig.ebike_available,
-                          }}
-                        >
-                          <RechartsPrimitive.PieChart>
-                            <ChartTooltip
-                              content={
-                                <ChartTooltipContent
-                                  formatter={(value, name) => (
-                                    <div className="flex flex-1 justify-between gap-8">
-                                      <span className="text-muted-foreground">{name}</span>
-                                      <span className="font-mono tabular-nums">{formatNumber(Number(value) || 0)}</span>
-                                    </div>
-                                  )}
-                                />
-                              }
-                            />
-                            <RechartsPrimitive.Pie
-                              data={pieData}
-                              dataKey="value"
-                              nameKey="name"
-                              innerRadius={55}
-                              outerRadius={85}
-                              paddingAngle={2}
-                            >
-                              {pieData.map((entry) => (
-                                <RechartsPrimitive.Cell
-                                  key={entry.key}
-                                  fill={`var(--color-${entry.key})`}
-                                />
-                              ))}
-                            </RechartsPrimitive.Pie>
-                            <RechartsPrimitive.Legend />
-                          </RechartsPrimitive.PieChart>
-                        </ChartContainer>
-
-                        <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                          <div className="rounded-lg border border-white/10 bg-background/40 p-3">
-                            <div className="text-muted-foreground text-xs">Méca</div>
-                            <div className="font-semibold">{formatNumber(data.totals.mechanical_available)}</div>
-                          </div>
-                          <div className="rounded-lg border border-white/10 bg-background/40 p-3">
-                            <div className="text-muted-foreground text-xs">Élec</div>
-                            <div className="font-semibold">{formatNumber(data.totals.ebike_available)}</div>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </div>
-
-                  <Card className="mt-4 bg-white/90 backdrop-blur">
-                    <CardHeader className="border-b border-white/10">
-                      <CardTitle className="text-base">Tendance (auto-refresh)</CardTitle>
-                      <CardDescription>Historique local depuis l’ouverture de la page.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="pt-6">
-                      <ChartContainer
-                        className="aspect-[16/6]"
-                        config={{
-                          bikes_available: chartConfig.bikes_available,
-                          docks_available: chartConfig.docks_available,
-                        }}
-                      >
-                        <RechartsPrimitive.LineChart data={history} margin={{ left: 10, right: 10 }}>
-                          <RechartsPrimitive.CartesianGrid vertical={false} />
-                          <RechartsPrimitive.XAxis
-                            dataKey="t"
-                            tickLine={false}
-                            axisLine={false}
-                            tickFormatter={(v: number) =>
-                              new Date(v).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
-                            }
-                          />
-                          <RechartsPrimitive.YAxis tickLine={false} axisLine={false} />
-                          <ChartTooltip
-                            content={
-                              <ChartTooltipContent
-                                labelFormatter={(label) =>
-                                  new Date(Number(label)).toLocaleTimeString('fr-FR', {
-                                    hour: '2-digit',
-                                    minute: '2-digit',
-                                    second: '2-digit',
-                                  })
-                                }
-                              />
-                            }
-                          />
-                          <ChartLegend content={<ChartLegendContent />} />
-                          <RechartsPrimitive.Line
-                            type="monotone"
-                            dataKey="bikes_available"
-                            stroke="var(--color-bikes_available)"
-                            strokeWidth={2}
-                            dot={false}
-                          />
-                          <RechartsPrimitive.Line
-                            type="monotone"
-                            dataKey="docks_available"
-                            stroke="var(--color-docks_available)"
-                            strokeWidth={2}
-                            dot={false}
-                          />
-                        </RechartsPrimitive.LineChart>
-                      </ChartContainer>
-                    </CardContent>
-                  </Card>
-                </TabsContent>
-
-                <TabsContent value="zones">
-                  <Card className="bg-white/90 backdrop-blur">
-                    <CardHeader className="border-b border-white/10">
-                      <CardTitle className="text-base">Top zones (table)</CardTitle>
-                      <CardDescription>Vue tabulaire rapide et lisible.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="pt-6">
-                      <div className="rounded-xl border border-red-200/60 bg-white/95 overflow-hidden">
-                        <Table>
-                          <TableHeader>
-                            <TableRow className="bg-red-50/70">
-                              <TableHead className="sticky top-0 bg-red-50/90 backdrop-blur !text-red-900">Zone</TableHead>
-                              <TableHead className="sticky top-0 bg-red-50/90 backdrop-blur text-right !text-red-900">Stations</TableHead>
-                              <TableHead className="sticky top-0 bg-red-50/90 backdrop-blur text-right !text-red-900">Vélos</TableHead>
-                              <TableHead className="sticky top-0 bg-red-50/90 backdrop-blur text-right !text-red-900">Bornes</TableHead>
-                              <TableHead className="sticky top-0 bg-red-50/90 backdrop-blur text-right !text-red-900">Méca</TableHead>
-                              <TableHead className="sticky top-0 bg-red-50/90 backdrop-blur text-right !text-red-900">Élec</TableHead>
-                              <TableHead className="sticky top-0 bg-red-50/90 backdrop-blur text-right !text-red-900">Capacité</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {visibleAreas.map((a, idx) => (
-                              <TableRow key={a.name} className={idx % 2 === 0 ? 'bg-white' : 'bg-red-50/30'}>
-                                <TableCell className="font-semibold !text-red-900">{a.name}</TableCell>
-                                <TableCell className="text-right font-mono tabular-nums">{formatNumber(a.stations)}</TableCell>
-                                <TableCell className="text-right font-mono tabular-nums">{formatNumber(a.bikes_available)}</TableCell>
-                                <TableCell className="text-right font-mono tabular-nums">{formatNumber(a.docks_available)}</TableCell>
-                                <TableCell className="text-right font-mono tabular-nums">{formatNumber(a.mechanical_available)}</TableCell>
-                                <TableCell className="text-right font-mono tabular-nums">{formatNumber(a.ebike_available)}</TableCell>
-                                <TableCell className="text-right font-mono tabular-nums">{formatNumber(a.capacity)}</TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </TabsContent>
-
-                <TabsContent value="explore">
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                    <Card className="lg:col-span-1 bg-white/90 backdrop-blur">
-                      <CardHeader className="border-b border-white/10">
-                        <CardTitle className="text-base">Contrôles</CardTitle>
-                        <CardDescription>Filtrer / trier / explorer les zones.</CardDescription>
-                      </CardHeader>
-                      <CardContent className="pt-6 space-y-4">
-                        <div className="space-y-2">
-                          <div className="text-sm font-medium">Recherche</div>
-                          <div className="relative">
-                            <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                            <Input
-                              value={search}
-                              onChange={(e) => setSearch(e.target.value)}
-                              placeholder="Paris, Boulogne…"
-                              className="pl-9"
-                            />
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="space-y-2">
-                            <div className="text-sm font-medium">Métrique</div>
-                            <Select value={metric} onValueChange={(v) => setMetric(v as MetricKey)}>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Choisir" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="bikes_available">Vélos</SelectItem>
-                                <SelectItem value="docks_available">Bornes</SelectItem>
-                                <SelectItem value="mechanical_available">Méca</SelectItem>
-                                <SelectItem value="ebike_available">Élec</SelectItem>
-                                <SelectItem value="capacity">Capacité</SelectItem>
-                                <SelectItem value="stations">Stations</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-
-                          <div className="space-y-2">
-                            <div className="text-sm font-medium">Top N</div>
-                            <Select
-                              value={String(topN)}
-                              onValueChange={(v) => setTopN(Number(v))}
-                            >
-                              <SelectTrigger>
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="10">10</SelectItem>
-                                <SelectItem value="15">15</SelectItem>
-                                <SelectItem value="25">25</SelectItem>
-                                <SelectItem value="50">50</SelectItem>
-                                <SelectItem value="0">Tout</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          <Button
-                            variant="outline"
-                            className="gap-2"
-                            onClick={() => setSortDir((d) => (d === 'desc' ? 'asc' : 'desc'))}
-                          >
-                            <ArrowDownUp className="h-4 w-4" />
-                            {sortDir === 'desc' ? (
-                              <span className="inline-flex items-center gap-1">
-                                <ArrowDownAZ className="h-4 w-4" /> Desc
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1">
-                                <ArrowUpAZ className="h-4 w-4" /> Asc
-                              </span>
-                            )}
-                          </Button>
-                          <Button variant="outline" onClick={() => setSearch('')} disabled={!search}>
-                            Reset
-                          </Button>
-                        </div>
-
-                        <div className="text-xs text-muted-foreground">
-                          Résultats: {formatNumber(sortedAreas.length)} zone(s)
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    <Card className="lg:col-span-2 bg-white/90 backdrop-blur">
-                      <CardHeader className="border-b border-white/10">
-                        <CardTitle className="text-base">Graphique exploratoire</CardTitle>
-                        <CardDescription>
-                          Classement par « {metric.replaceAll('_', ' ')} » sur la sélection.
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent className="pt-6">
-                        <ChartContainer
-                          className="aspect-[16/7]"
-                          config={{ [metric]: chartConfig[metric] }}
-                        >
-                          <RechartsPrimitive.BarChart data={visibleAreas} margin={{ left: 10, right: 10 }}>
-                            <RechartsPrimitive.CartesianGrid vertical={false} />
-                            <RechartsPrimitive.XAxis
-                              dataKey="name"
-                              tickLine={false}
-                              axisLine={false}
-                              interval={0}
-                              angle={-18}
-                              textAnchor="end"
-                              height={60}
-                              tickFormatter={(v: string) => (v.length > 16 ? `${v.slice(0, 16)}…` : v)}
-                            />
-                            <RechartsPrimitive.YAxis tickLine={false} axisLine={false} />
-                            <ChartTooltip content={<ChartTooltipContent />} />
-                            <RechartsPrimitive.Bar
-                              dataKey={metric}
-                              fill={`var(--color-${metric})`}
-                              radius={[6, 6, 0, 0]}
-                              maxBarSize={42}
-                            />
-                          </RechartsPrimitive.BarChart>
-                        </ChartContainer>
-
-                        <div className="mt-6">
-                          <div className="text-sm font-medium mb-2">Table (tri + filtre)</div>
-                          <div className="rounded-xl border border-red-200/60 bg-white/95 overflow-hidden">
-                            <Table>
-                              <TableHeader>
-                                <TableRow className="bg-red-50/70">
-                                  <TableHead className="sticky top-0 bg-red-50/90 backdrop-blur !text-red-900">Zone</TableHead>
-                                  <TableHead className="sticky top-0 bg-red-50/90 backdrop-blur text-right !text-red-900">Stations</TableHead>
-                                  <TableHead className="sticky top-0 bg-red-50/90 backdrop-blur text-right !text-red-900">Vélos</TableHead>
-                                  <TableHead className="sticky top-0 bg-red-50/90 backdrop-blur text-right !text-red-900">Bornes</TableHead>
-                                  <TableHead className="sticky top-0 bg-red-50/90 backdrop-blur text-right !text-red-900">Méca</TableHead>
-                                  <TableHead className="sticky top-0 bg-red-50/90 backdrop-blur text-right !text-red-900">Élec</TableHead>
-                                  <TableHead className="sticky top-0 bg-red-50/90 backdrop-blur text-right !text-red-900">Capacité</TableHead>
-                                </TableRow>
-                              </TableHeader>
-                              <TableBody>
-                                {visibleAreas.map((a, idx) => (
-                                  <TableRow key={a.name} className={idx % 2 === 0 ? 'bg-white' : 'bg-red-50/30'}>
-                                    <TableCell className="font-semibold !text-red-900">{a.name}</TableCell>
-                                    <TableCell className="text-right font-mono tabular-nums">{formatNumber(a.stations)}</TableCell>
-                                    <TableCell className="text-right font-mono tabular-nums">{formatNumber(a.bikes_available)}</TableCell>
-                                    <TableCell className="text-right font-mono tabular-nums">{formatNumber(a.docks_available)}</TableCell>
-                                    <TableCell className="text-right font-mono tabular-nums">{formatNumber(a.mechanical_available)}</TableCell>
-                                    <TableCell className="text-right font-mono tabular-nums">{formatNumber(a.ebike_available)}</TableCell>
-                                    <TableCell className="text-right font-mono tabular-nums">{formatNumber(a.capacity)}</TableCell>
-                                  </TableRow>
-                                ))}
-                              </TableBody>
-                            </Table>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </div>
-                </TabsContent>
-              </Tabs>
-            )}
-          </CardContent>
-        </Card>
+            <Button
+              variant="outline"
+              className="gap-2 bg-white text-cyan-600 hover:bg-cyan-50 font-semibold"
+              onClick={() => {
+                const rows = (data?.by_area ?? []).map((a) => ({
+                  zone: a.name,
+                  stations: a.stations,
+                  capacity: a.capacity,
+                  bikes_available: a.bikes_available,
+                  docks_available: a.docks_available,
+                  mechanical_available: a.mechanical_available,
+                  ebike_available: a.ebike_available,
+                }));
+                downloadText(
+                  `velib-realtime-zones-${new Date()
+                    .toISOString()
+                    .slice(0, 10)}.csv`,
+                  toCsv(rows),
+                );
+              }}
+              disabled={!data?.by_area?.length}
+            >
+              <Download className="w-4 h-4" />
+              Export CSV
+            </Button>
+          </div>
+        </div>
       </div>
 
+      <div className="px-8 py-8">
+        <div className="mx-auto max-w-7xl">
+          {error && (
+            <Card className="mb-6 border-red-300 bg-red-50 shadow-md">
+              <CardContent className="pt-6 text-red-800 text-sm font-medium flex items-start gap-3">
+                <span className="text-lg">⚠️</span>
+                <span>{error}</span>
+              </CardContent>
+            </Card>
+          )}
+
+          {loading && !data && (
+            <div className="text-center py-12">
+              <div className="w-12 h-12 border-4 border-cyan-200 border-t-cyan-600 rounded-full animate-spin mx-auto mb-4"></div>
+              <p className="text-gray-600 font-medium">Chargement des données en temps réel...</p>
+            </div>
+          )}
+
+          {data && (
+            <Tabs
+              value={activeTab}
+              onValueChange={(v) => setActiveTab(v as 'overview' | 'zones' | 'explore')}
+            >
+              <TabsList className="mb-8 bg-gray-200/50 p-1 rounded-lg">
+                <TabsTrigger value="overview" className="data-[state=active]:bg-white data-[state=active]:shadow-md">
+                  📊 Aperçu
+                </TabsTrigger>
+                <TabsTrigger value="zones" className="data-[state=active]:bg-white data-[state=active]:shadow-md">
+                  🗺️ Zones
+                </TabsTrigger>
+                <TabsTrigger value="explore" className="data-[state=active]:bg-white data-[state=active]:shadow-md">
+                  🔍 Explorer
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="overview" className="space-y-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-6 rounded-xl border border-blue-200 shadow-sm hover:shadow-md transition-shadow">
+                    <div className="flex items-center justify-between mb-3">
+                      <p className="text-gray-700 font-semibold text-sm">Stations</p>
+                      <MapPin className="w-5 h-5 text-blue-600" />
+                    </div>
+                    <p className="text-4xl font-bold text-blue-600">
+                      {data ? formatNumber(data.totals.stations) : '—'}
+                    </p>
+                  </div>
+                  <div className="bg-gradient-to-br from-green-50 to-green-100 p-6 rounded-xl border border-green-200 shadow-sm hover:shadow-md transition-shadow">
+                    <div className="flex items-center justify-between mb-3">
+                      <p className="text-gray-700 font-semibold text-sm">Capacité Totale</p>
+                      <Zap className="w-5 h-5 text-green-600" />
+                    </div>
+                    <p className="text-4xl font-bold text-green-600">
+                      {data ? formatNumber(data.totals.capacity) : '—'}
+                    </p>
+                  </div>
+                  <div className="bg-gradient-to-br from-purple-50 to-purple-100 p-6 rounded-xl border border-purple-200 shadow-sm hover:shadow-md transition-shadow">
+                    <div className="flex items-center justify-between mb-3">
+                      <p className="text-gray-700 font-semibold text-sm">Vélos Disponibles</p>
+                      <Bike className="w-5 h-5 text-purple-600" />
+                    </div>
+                    <p className="text-4xl font-bold text-purple-600">
+                      {data ? formatNumber(data.totals.bikes_available) : '—'}
+                    </p>
+                  </div>
+                  <div className="bg-gradient-to-br from-orange-50 to-orange-100 p-6 rounded-xl border border-orange-200 shadow-sm hover:shadow-md transition-shadow">
+                    <div className="flex items-center justify-between mb-3">
+                      <p className="text-gray-700 font-semibold text-sm">Emplacements Libres</p>
+                      <TrendingUp className="w-5 h-5 text-orange-600" />
+                    </div>
+                    <p className="text-4xl font-bold text-orange-600">
+                      {data ? formatNumber(data.totals.docks_available) : '—'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                    <h3 className="text-lg font-bold text-gray-900 mb-4">Distribution des Types</h3>
+                    {data && pieData.some((p) => p.value > 0) ? (
+                      <ResponsiveContainer width="100%" height={300}>
+                        <PieChart>
+                          <Pie
+                            data={pieData}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={80}
+                            outerRadius={120}
+                            paddingAngle={2}
+                            dataKey="value"
+                            nameKey="name"
+                            label={{ fill: '#666', fontSize: 12 }}
+                          >
+                            {pieData.map((entry, index) => (
+                              <Cell
+                                key={`cell-${entry.key}`}
+                                fill={['#0f766e', '#f59e0b'][index % 2]}
+                              />
+                            ))}
+                          </Pie>
+                          <Tooltip formatter={(value) => `${value} vélos`} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <p className="text-gray-500 text-center py-8">Données non disponibles</p>
+                    )}
+                  </div>
+
+                  <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                    <h3 className="text-lg font-bold text-gray-900 mb-4">Historique (24h)</h3>
+                    {history && history.length > 0 ? (
+                      <ResponsiveContainer width="100%" height={300}>
+                        <LineChart data={history}>
+                          <defs>
+                            <linearGradient id="colorBikes" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8} />
+                              <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                          <XAxis dataKey="t" stroke="#9ca3af" tickFormatter={(t) => new Date(t).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} />
+                          <YAxis stroke="#9ca3af" />
+                          <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb' }} labelFormatter={(t) => new Date(t as number).toLocaleTimeString('fr-FR')} />
+                          <Line type="monotone" dataKey="bikes_available" stroke="#3b82f6" strokeWidth={2} dot={false} />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <p className="text-gray-500 text-center py-8">Historique non disponible</p>
+                    )}
+                  </div>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="zones" className="space-y-6">
+                <div className="flex flex-col md:flex-row gap-4 items-end">
+                  <div className="flex-1">
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Rechercher une zone</label>
+                    <Input
+                      placeholder="Entrez le nom d'une zone..."
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      className="w-full"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Métrique</label>
+                    <Select value={metric} onValueChange={(v) => setMetric(v as MetricKey)}>
+                      <SelectTrigger className="w-full md:w-40">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="bikes_available">Vélos disponibles</SelectItem>
+                        <SelectItem value="docks_available">Emplacements libres</SelectItem>
+                        <SelectItem value="capacity">Capacité</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50 border-b border-gray-200">
+                        <tr>
+                          <th className="text-left py-3 px-4 font-semibold text-gray-900">Zone</th>
+                          <th className="text-center py-3 px-4 font-semibold text-gray-900">Stations</th>
+                          <th className="text-center py-3 px-4 font-semibold text-gray-900">Vélos</th>
+                          <th className="text-center py-3 px-4 font-semibold text-gray-900">Emplacements</th>
+                          <th className="text-center py-3 px-4 font-semibold text-gray-900">Utilisation</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {visibleAreas.map((area, idx) => {
+                          const ratio =
+                            area.capacity > 0 ? area.bikes_available / area.capacity : 0;
+                          return (
+                            <tr key={area.name} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                              <td className="py-3 px-4 text-gray-900 font-semibold">{area.name}</td>
+                              <td className="py-3 px-4 text-center text-gray-700">{formatNumber(area.stations)}</td>
+                              <td className="py-3 px-4 text-center text-gray-700">{formatNumber(area.bikes_available)}</td>
+                              <td className="py-3 px-4 text-center text-gray-700">{formatNumber(area.docks_available)}</td>
+                              <td className="py-3 px-4 text-center">
+                                <span className="inline-flex items-center gap-2">
+                                  <div className="w-24 h-2 bg-gray-200 rounded-full overflow-hidden">
+                                    <div
+                                      className="h-full bg-gradient-to-r from-green-500 to-blue-500"
+                                      style={{ width: `${Math.min(ratio * 100, 100)}%` }}
+                                    />
+                                  </div>
+                                  <span className="text-xs font-semibold text-gray-600 w-10">
+                                    {formatPercent(ratio)}
+                                  </span>
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="explore" className="space-y-6">
+                <div className="bg-gradient-to-br from-indigo-50 to-blue-50 p-8 rounded-xl border border-indigo-200 shadow-sm">
+                  <div className="flex items-start gap-4">
+                    <div className="p-3 bg-indigo-100 rounded-lg">
+                      <Search className="w-6 h-6 text-indigo-600" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold text-indigo-900 mb-2">Explorer les Données</h3>
+                      <p className="text-indigo-700 text-sm">
+                        Explorez les stations Vélib'est en détail avec accès à des analyses avancées, des prévisions et des tendances. 
+                        Disponible prochainement.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </TabsContent>
+            </Tabs>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

@@ -1,43 +1,102 @@
-import { useState, useMemo, memo } from 'react';
+import { useState, useMemo, memo, useEffect } from 'react';
 import { Card } from '../../shared/ui/card';
 import { Button } from '../../shared/ui/button';
 import { Badge } from '../../shared/ui/badge';
-import { MapPin, Layers, Filter, ZoomIn, ZoomOut, Maximize2, Bike, AlertCircle } from 'lucide-react';
+import { MapPin, Layers, Filter, ZoomIn, ZoomOut, Maximize2, Bike, AlertCircle, X } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../shared/ui/select';
+import { api, API_ENDPOINTS } from '../../api/config';
 
-// Mock station locations for Paris
-const stations = [
-  { id: 1, name: 'Gare du Nord', lat: 48.8809, lng: 2.3553, bikes: 42, docks: 8, capacity: 50, status: 'high', arr: '10e' },
-  { id: 2, name: 'Champs-Élysées', lat: 48.8698, lng: 2.3078, bikes: 38, docks: 12, capacity: 50, status: 'high', arr: '8e' },
-  { id: 3, name: 'Bastille', lat: 48.8531, lng: 2.3694, bikes: 5, docks: 35, capacity: 40, status: 'low', arr: '11e' },
-  { id: 4, name: 'Luxembourg', lat: 48.8462, lng: 2.3372, bikes: 28, docks: 22, capacity: 50, status: 'medium', arr: '6e' },
-  { id: 5, name: 'République', lat: 48.8676, lng: 2.3634, bikes: 7, docks: 33, capacity: 40, status: 'low', arr: '3e' },
-  { id: 6, name: 'Tour Eiffel', lat: 48.8584, lng: 2.2945, bikes: 32, docks: 18, capacity: 50, status: 'medium', arr: '7e' },
-  { id: 7, name: 'Louvre', lat: 48.8606, lng: 2.3376, bikes: 15, docks: 25, capacity: 40, status: 'medium', arr: '1er' },
-  { id: 8, name: 'Notre-Dame', lat: 48.8530, lng: 2.3499, bikes: 9, docks: 31, capacity: 40, status: 'low', arr: '4e' },
-  { id: 9, name: 'Montmartre', lat: 48.8867, lng: 2.3431, bikes: 41, docks: 9, capacity: 50, status: 'high', arr: '18e' },
-  { id: 10, name: 'Saint-Germain', lat: 48.8534, lng: 2.3330, bikes: 24, docks: 16, capacity: 40, status: 'medium', arr: '6e' },
-  { id: 11, name: 'Opéra', lat: 48.8719, lng: 2.3316, bikes: 36, docks: 14, capacity: 50, status: 'high', arr: '9e' },
-  { id: 12, name: 'Châtelet', lat: 48.8583, lng: 2.3470, bikes: 3, docks: 47, capacity: 50, status: 'critical', arr: '1er' },
-];
-
-const arrondissements = [
-  { id: '1er', name: '1er', color: '#3b82f6', stations: 45 },
-  { id: '3e', name: '3e', color: '#10b981', stations: 52 },
-  { id: '4e', name: '4e', color: '#f59e0b', stations: 48 },
-  { id: '6e', name: '6e', color: '#8b5cf6', stations: 50 },
-  { id: '7e', name: '7e', color: '#ec4899', stations: 58 },
-  { id: '8e', name: '8e', color: '#14b8a6', stations: 62 },
-  { id: '9e', name: '9e', color: '#f97316', stations: 54 },
-  { id: '10e', name: '10e', color: '#06b6d4', stations: 68 },
-  { id: '11e', name: '11e', color: '#84cc16', stations: 72 },
-  { id: '18e', name: '18e', color: '#a855f7', stations: 45 },
-];
+// Helper function to determine status based on utilization
+const getStatusFromUtilization = (bikes: number, docks: number): string => {
+  const capacity = bikes + docks;
+  if (capacity === 0) return 'low';
+  const utilization = (bikes / capacity) * 100;
+  if (utilization >= 70) return 'high';
+  if (utilization >= 40) return 'medium';
+  return 'low';
+};
 
 export function MapAnalysis() {
+  const [stations, setStations] = useState<any[]>([]);
   const [selectedStation, setSelectedStation] = useState<number | null>(null);
   const [filterStatus, setFilterStatus] = useState('all');
+  const [filterProfile, setFilterProfile] = useState('all');
   const [showHeatmap, setShowHeatmap] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [arrondissements, setArrondissements] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchStations = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        
+        // Fetch real stations from API (limit to first 500 for performance on map)
+        const response = await api.get(`${API_ENDPOINTS.stations}?limit=500`);
+        
+        // API returns paginated response with results property
+        const stationsList = response.results || response;
+        
+        if (Array.isArray(stationsList)) {
+          const transformedStations = stationsList.map((s: any, idx: number) => {
+            // Use mechanical + ebike since numbikesavailable is always 0
+            const bikes = (s.mechanical || 0) + (s.ebike || 0);
+            const capacity = s.capacity || 1;
+            const status = getStatusFromUtilization(bikes, capacity - bikes);
+            
+            return {
+              id: s.id || idx,
+              name: s.name || s.stationcode || s.station || `Station ${s.id}`,
+              lat: parseFloat(s.latitude) || 48.85,
+              lng: parseFloat(s.longitude) || 2.35,
+              bikes: bikes,
+              docks: capacity - bikes, // Remaining capacity
+              capacity: capacity,
+              status: status,
+              arr: s.commune_name || s.commune || `Commune ${s.id}`,
+              profile: s.profile || 'unknown',
+              isGhost: s.profile === 'ghost_station',
+            };
+          });
+          
+          setStations(transformedStations);
+        } else {
+          setError('Failed to parse station data');
+          setStations([]);
+        }
+      } catch (err) {
+        console.error('Error fetching stations:', err);
+        setError(`Unable to load stations: ${err instanceof Error ? err.message : 'Unknown error'}`);
+        setStations([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchStations();
+  }, []);
+
+  // Fetch communes data for arrondissements list
+  useEffect(() => {
+    const fetchArrondissements = async () => {
+      try {
+        const communes = await api.get(API_ENDPOINTS.communeSummary);
+        if (Array.isArray(communes)) {
+          const colors = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#14b8a6', '#f97316', '#6366f1', '#84cc16', '#22d3ee', '#a855f7', '#ef4444'];
+          setArrondissements(communes.map((c: any, idx: number) => ({
+            id: c.id,
+            name: c.name || c.commune,
+            stations: c.station_count || 0,
+            color: colors[idx % colors.length],
+          })));
+        }
+      } catch (err) {
+        console.error('Error fetching arrondissements:', err);
+      }
+    };
+    fetchArrondissements();
+  }, []);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -56,51 +115,75 @@ export function MapAnalysis() {
     return 10;
   };
 
-  const filteredStations = filterStatus === 'all' 
-    ? stations 
-    : stations.filter(s => s.status === filterStatus);
+  const filteredStations = stations.filter(s => {
+    const statusMatch = filterStatus === 'all' || s.status === filterStatus;
+    const profileMatch = filterProfile === 'all' || s.profile === filterProfile;
+    return statusMatch && profileMatch;
+  });
 
   return (
-    <div className="p-8">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h2 className="text-3xl text-gray-900 mb-2">Geolocation Map Analysis</h2>
-          <p className="text-gray-600">Interactive map view of all bicycle stations across France</p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm">
-            <Maximize2 className="w-4 h-4 mr-2" />
-            Fullscreen
-          </Button>
-          <Button variant="outline" size="sm">
-            Export Map
-          </Button>
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100">
+      {/* Header with gradient */}
+      <div className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white px-8 pt-8 pb-12">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-4xl font-bold mb-2 flex items-center gap-3">
+              <MapPin className="w-8 h-8" />
+              Analyse Cartographique
+            </h2>
+            <p className="text-purple-100 text-lg">Vue interactive de toutes les stations de vélos à travers Paris</p>
+          </div>
+          <div className="flex gap-2">
+            <Button className="bg-white text-purple-600 hover:bg-purple-50 font-semibold">
+              <Maximize2 className="w-4 h-4 mr-2" />
+              Plein Écran
+            </Button>
+            <Button className="bg-white text-purple-600 hover:bg-purple-50 font-semibold">
+              Exporter Carte
+            </Button>
+          </div>
         </div>
       </div>
 
+      <div className="px-8 py-8">
       {/* Controls */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-6">
-        <Card className="p-4">
-          <label className="block text-sm text-gray-700 mb-2">Filter by Status</label>
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 mb-6">
+        <Card className="p-4 border-0 shadow-md">
+          <label className="block text-sm font-semibold text-gray-700 mb-3">Filtrer par État</label>
           <Select value={filterStatus} onValueChange={setFilterStatus}>
-            <SelectTrigger>
+            <SelectTrigger className="border border-gray-300">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Stations</SelectItem>
-              <SelectItem value="high">High Availability</SelectItem>
-              <SelectItem value="medium">Medium Availability</SelectItem>
-              <SelectItem value="low">Low Availability</SelectItem>
-              <SelectItem value="critical">Critical</SelectItem>
+              <SelectItem value="all">Toutes les Stations</SelectItem>
+              <SelectItem value="high">Disponibilité Haute</SelectItem>
+              <SelectItem value="medium">Disponibilité Moyenne</SelectItem>
+              <SelectItem value="low">Disponibilité Basse</SelectItem>
+              <SelectItem value="critical">Critique</SelectItem>
             </SelectContent>
           </Select>
         </Card>
 
-        <Card className="p-4">
-          <label className="block text-sm text-gray-700 mb-2">Map Layer</label>
+        <Card className="p-4 border-0 shadow-md">
+          <label className="block text-sm font-semibold text-gray-700 mb-3">Profil de Station</label>
+          <Select value={filterProfile} onValueChange={setFilterProfile}>
+            <SelectTrigger className="border border-gray-300">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tous les Profils</SelectItem>
+              <SelectItem value="ghost_station">🚫 Stations Fantômes</SelectItem>
+              <SelectItem value="commuter_source">📤 Sources (Distributeurs)</SelectItem>
+              <SelectItem value="commuter_sink">📥 Puits (Attracteurs)</SelectItem>
+              <SelectItem value="balanced_hub">⚖️ Hubs Équilibrés</SelectItem>
+            </SelectContent>
+          </Select>
+        </Card>
+
+        <Card className="p-4 border-0 shadow-md">
+          <label className="block text-sm font-semibold text-gray-700 mb-3">Couche Cartographique</label>
           <Select defaultValue="standard">
-            <SelectTrigger>
+            <SelectTrigger className="border border-gray-300">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -111,126 +194,159 @@ export function MapAnalysis() {
           </Select>
         </Card>
 
-        <Card className="p-4">
-          <label className="block text-sm text-gray-700 mb-2">Overlay</label>
-          <div className="flex items-center gap-2">
+        <Card className="p-4 border-0 shadow-md">
+          <label className="block text-sm font-semibold text-gray-700 mb-3">Superposition</label>
+          <div className="flex items-center gap-3 p-2 bg-gradient-to-r from-purple-50 to-indigo-50 rounded-lg border border-purple-200">
             <input 
               type="checkbox" 
               checked={showHeatmap}
               onChange={(e) => setShowHeatmap(e.target.checked)}
-              className="rounded"
+              className="rounded border border-purple-300 accent-purple-600"
+              id="heatmap"
             />
-            <span className="text-sm text-gray-700">Show Heatmap</span>
+            <label htmlFor="heatmap" className="text-sm font-medium text-gray-700 cursor-pointer">Afficher Heatmap</label>
           </div>
         </Card>
 
-        <Card className="p-4 bg-blue-50">
-          <p className="text-sm text-blue-900">Showing {filteredStations.length} stations</p>
-          <p className="text-xs text-blue-700 mt-1">of {stations.length} total</p>
+        <Card className={`p-4 border-0 shadow-md ${error ? 'bg-red-50 border border-red-300' : loading ? 'bg-blue-50 border border-blue-200' : 'bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200'}`}>
+          {loading ? (
+            <div>
+              <div className="w-6 h-6 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mb-2"></div>
+              <p className="text-sm font-semibold text-blue-900">Chargement...</p>
+            </div>
+          ) : error ? (
+            <div className="text-sm text-red-900">
+              <AlertCircle className="w-4 h-4 inline mr-1" />
+              {error}
+            </div>
+          ) : (
+            <>
+              <p className="text-sm font-bold text-gray-900">{filteredStations.length} stations</p>
+              <p className="text-xs text-gray-600 mt-1">sur {stations.length} au total</p>
+            </>
+          )}
         </Card>
       </div>
 
       {/* Main Map Area */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mt-6">
         {/* Map */}
-        <Card className="p-0 lg:col-span-3 overflow-hidden">
-          <div className="relative bg-gray-100 h-[600px]">
-            {/* Map Placeholder - In production, use react-leaflet or similar */}
-            <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-blue-50 to-green-50">
-              {/* SVG Map Representation */}
-              <svg width="100%" height="100%" viewBox="0 0 800 600" className="absolute inset-0">
-                {/* Paris map outline (simplified) */}
-                <circle cx="400" cy="300" r="200" fill="#e0f2fe" stroke="#3b82f6" strokeWidth="2" opacity="0.3" />
+        <Card className="p-0 lg:col-span-3 overflow-hidden border-0 shadow-lg">
+          <div className="relative bg-gradient-to-br from-blue-100 to-green-100 h-[600px]">
+            {/* SVG Interactive Map */}
+            <svg width="100%" height="100%" viewBox="0 0 800 600" className="absolute inset-0 bg-gradient-to-br from-blue-50 via-cyan-50 to-green-50">
+              <defs>
+                <radialGradient id="heatmap" cx="50%" cy="50%" r="50%">
+                  <stop offset="0%" stopColor="#ef4444" stopOpacity="0.3"/>
+                  <stop offset="50%" stopColor="#f59e0b" stopOpacity="0.2"/>
+                  <stop offset="100%" stopColor="#10b981" stopOpacity="0.1"/>
+                </radialGradient>
+              </defs>
+              
+              {/* Paris area outline with gradient */}
+              <circle cx="400" cy="300" r="200" fill="none" stroke="#3b82f6" strokeWidth="3" opacity="0.2" />
+              <circle cx="400" cy="300" r="150" fill="none" stroke="#06b6d4" strokeWidth="2" opacity="0.15" />
+              
+              {/* Station markers with enhanced styling */}
+              {filteredStations.map((station) => {
+                const x = 300 + (station.lng - 2.3) * 500;
+                const y = 300 - (station.lat - 48.85) * 2000;
+                const size = getMarkerSize(station.bikes, station.capacity);
+                const statusColor = getStatusColor(station.status);
+                const isGhost = station.isGhost;
+                const ghostColor = '#9ca3af'; // gray-400
+                const markerColor = isGhost ? ghostColor : statusColor;
                 
-                {/* Station markers */}
-                {filteredStations.map((station) => {
-                  const x = 300 + (station.lng - 2.3) * 500;
-                  const y = 300 - (station.lat - 48.85) * 2000;
-                  const size = getMarkerSize(station.bikes, station.capacity);
-                  
-                  return (
-                    <g key={station.id}>
-                      <circle
-                        cx={x}
-                        cy={y}
-                        r={size}
-                        fill={getStatusColor(station.status)}
-                        stroke="white"
-                        strokeWidth="2"
-                        opacity="0.9"
-                        className="cursor-pointer hover:opacity-100 transition-opacity"
-                        onClick={() => setSelectedStation(station.id)}
-                      />
-                      {selectedStation === station.id && (
-                        <>
-                          <circle cx={x} cy={y} r={size + 4} fill="none" stroke={getStatusColor(station.status)} strokeWidth="2" opacity="0.5" />
-                          <circle cx={x} cy={y} r={size + 8} fill="none" stroke={getStatusColor(station.status)} strokeWidth="1" opacity="0.3" />
-                        </>
-                      )}
-                    </g>
-                  );
-                })}
-
-                {/* Labels for major stations */}
-                {filteredStations.slice(0, 5).map((station) => {
-                  const x = 300 + (station.lng - 2.3) * 500;
-                  const y = 300 - (station.lat - 48.85) * 2000;
-                  return (
-                    <text 
-                      key={`label-${station.id}`}
-                      x={x} 
-                      y={y - 20} 
-                      textAnchor="middle" 
-                      className="text-xs fill-gray-700"
-                      style={{ fontSize: '10px' }}
-                    >
-                      {station.name}
-                    </text>
-                  );
-                })}
-              </svg>
-
-              {/* Map watermark */}
-              <div className="absolute bottom-4 right-4 bg-white/90 px-3 py-2 rounded shadow text-xs text-gray-600">
-                Interactive Map View • Paris, France
-              </div>
-            </div>
-
-            {/* Map Controls */}
-            <div className="absolute top-4 right-4 flex flex-col gap-2">
-              <Button size="sm" variant="secondary" className="shadow">
-                <ZoomIn className="w-4 h-4" />
-              </Button>
-              <Button size="sm" variant="secondary" className="shadow">
-                <ZoomOut className="w-4 h-4" />
-              </Button>
-              <Button size="sm" variant="secondary" className="shadow">
-                <Layers className="w-4 h-4" />
-              </Button>
-            </div>
-
-            {/* Legend */}
-            <Card className="absolute bottom-4 left-4 p-4 shadow-lg">
-              <p className="text-sm text-gray-900 mb-3">Station Status</p>
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: '#10b981' }} />
-                  <span className="text-xs text-gray-700">High Availability (70%+)</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: '#f59e0b' }} />
-                  <span className="text-xs text-gray-700">Medium (30-70%)</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: '#ef4444' }} />
-                  <span className="text-xs text-gray-700">Low Availability (&lt;30%)</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: '#dc2626' }} />
-                  <span className="text-xs text-gray-700">Critical</span>
-                </div>
-              </div>
-            </Card>
+                return (
+                  <g key={station.id} style={{ cursor: 'pointer' }}>
+                    {/* Glow effect */}
+                    <circle
+                      cx={x}
+                      cy={y}
+                      r={size + 6}
+                      fill={markerColor}
+                      opacity={isGhost ? "0.08" : "0.15"}
+                    />
+                    {/* Main marker */}
+                    <circle
+                      cx={x}
+                      cy={y}
+                      r={size}
+                      fill={markerColor}
+                      stroke={isGhost ? "#6b7280" : "white"}
+                      strokeWidth={isGhost ? "1.5" : "2.5"}
+                      strokeDasharray={isGhost ? "3,3" : "none"}
+                      opacity={isGhost ? "0.6" : "0.9"}
+                      onClick={() => setSelectedStation(station.id)}
+                      style={{ transition: 'opacity 0.2s, filter 0.2s' }}
+                      onMouseOver={(e) => { (e.target as SVGCircleElement).style.filter = 'drop-shadow(0 4px 8px rgba(0,0,0,0.3))'; }}
+                      onMouseOut={(e) => { (e.target as SVGCircleElement).style.filter = 'drop-shadow(0 2px 4px rgba(0,0,0,0.1))'; }}
+                    />
+                    {/* Ghost station warning indicator */}
+                    {isGhost && (
+                      <text
+                        x={x}
+                        y={y + 1}
+                        textAnchor="middle"
+                        className="text-xs fill-gray-600"
+                        style={{ fontSize: '10px', fontWeight: 'bold', userSelect: 'none', pointerEvents: 'none' }}
+                      >
+                        ⚠️
+                      </text>
+                    )}
+                    {selectedStation === station.id && (
+                      <>
+                        <circle cx={x} cy={y} r={size + 4} fill="none" stroke={markerColor} strokeWidth="2.5" opacity="0.7" />
+                        <circle cx={x} cy={y} r={size + 8} fill="none" stroke={markerColor} strokeWidth="1.5" opacity="0.4" />
+                      </>
+                    )}
+                    {/* Enhanced popup for selected station */}
+                    {selectedStation === station.id && (
+                      <g>
+                        <defs>
+                          <filter id="popup-shadow">
+                            <feDropShadow dx="0" dy="4" stdDeviation="3" floodOpacity="0.3"/>
+                          </filter>
+                        </defs>
+                        <rect x={x - 75} y={y - 140} width="150" height={isGhost ? "140" : "120"} rx="10" fill="white" stroke={markerColor} strokeWidth="2.5" filter="url(#popup-shadow)" />
+                        <text x={x} y={y - 115} textAnchor="middle" className="text-xs font-bold fill-gray-900" style={{ fontSize: '12px', fontWeight: 'bold', userSelect: 'none' }}>
+                          {station.name.substring(0, 20)}
+                        </text>
+                        <text x={x} y={y - 98} textAnchor="middle" className="text-xs fill-gray-600" style={{ fontSize: '10px', userSelect: 'none' }}>
+                          {station.arr}
+                        </text>
+                        <line x1={x - 65} y1={y - 90} x2={x + 65} y2={y - 90} stroke="#e5e7eb" strokeWidth="1" />
+                        <text x={x} y={y - 75} textAnchor="middle" className="text-xs font-bold fill-green-600" style={{ fontSize: '11px', fontWeight: 'bold', userSelect: 'none' }}>
+                          🚲 {station.bikes} vélos
+                        </text>
+                        <text x={x} y={y - 60} textAnchor="middle" className="text-xs font-bold fill-blue-600" style={{ fontSize: '11px', fontWeight: 'bold', userSelect: 'none' }}>
+                          📍 {station.docks} places
+                        </text>
+                        <text x={x} y={y - 45} textAnchor="middle" className="text-xs fill-gray-600" style={{ fontSize: '9px', userSelect: 'none' }}>
+                          {Math.round((station.bikes / station.capacity) * 100)}% utilisé
+                        </text>
+                        {/* Profile information */}
+                        {isGhost && (
+                          <>
+                            <line x1={x - 65} y1={y - 35} x2={x + 65} y2={y - 35} stroke="#e5e7eb" strokeWidth="1" />
+                            <text x={x} y={y - 22} textAnchor="middle" className="text-xs font-bold fill-red-600" style={{ fontSize: '10px', fontWeight: 'bold', userSelect: 'none' }}>
+                              ⚠️ Station Fantôme
+                            </text>
+                          </>
+                        )}
+                        {/* Close button */}
+                        <g onClick={() => setSelectedStation(null)} style={{ cursor: 'pointer' }}>
+                          <rect x={x + 58} y={y - 138} width="24" height="24" rx="4" fill={markerColor} opacity="0.9" />
+                          <text x={x + 70} y={y - 107} textAnchor="middle" className="text-sm font-bold fill-white" style={{ fontSize: '16px', fontWeight: 'bold', userSelect: 'none' }}>
+                            ×
+                          </text>
+                        </g>
+                      </g>
+                    )}
+                  </g>
+                );
+              })}
+            </svg>
           </div>
         </Card>
 
@@ -242,99 +358,115 @@ export function MapAnalysis() {
                 const station = stations.find(s => s.id === selectedStation);
                 if (!station) return null;
                 return (
-                  <Card className="p-4">
-                    <div className="flex items-start justify-between mb-4">
-                      <h3 className="text-lg text-gray-900">{station.name}</h3>
-                      <Badge variant="outline">{station.arr}</Badge>
+                  <Card className="p-5 border-0 shadow-md">
+                    <div className="flex items-start justify-between mb-5">
+                      <div>
+                        <h3 className="text-xl font-bold text-gray-900">{station.name}</h3>
+                        <p className="text-sm text-gray-600 mt-1">📍 {station.arr}</p>
+                      </div>
+                      <Badge className={`px-3 py-1 font-bold text-xs ${
+                        station.status === 'high' ? 'bg-gradient-to-r from-green-100 to-emerald-100 text-green-700' :
+                        station.status === 'medium' ? 'bg-gradient-to-r from-yellow-100 to-amber-100 text-yellow-700' :
+                        'bg-gradient-to-r from-red-100 to-pink-100 text-red-700'
+                      }`}>
+                        {station.status === 'high' ? 'Haute' : station.status === 'medium' ? 'Moyenne' : 'Basse'}
+                      </Badge>
                     </div>
                     
-                    <div className="space-y-3 mb-4">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-gray-600">Available Bikes</span>
-                        <span className="text-lg text-gray-900">{station.bikes}</span>
+                    <div className="space-y-4 mb-5">
+                      <div className="p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border border-green-200">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm font-semibold text-gray-700">🚲 Vélos Disponibles</span>
+                          <span className="text-2xl font-bold text-green-600">{station.bikes}</span>
+                        </div>
+                        <p className="text-xs text-gray-600">Vélos prêts à être utilisés</p>
                       </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-gray-600">Available Docks</span>
-                        <span className="text-lg text-gray-900">{station.docks}</span>
+                      
+                      <div className="p-4 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-lg border border-blue-200">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm font-semibold text-gray-700">📍 Places Disponibles</span>
+                          <span className="text-2xl font-bold text-blue-600">{station.docks}</span>
+                        </div>
+                        <p className="text-xs text-gray-600">Emplacements libres pour stationnement</p>
                       </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-gray-600">Capacity</span>
-                        <span className="text-lg text-gray-900">{station.capacity}</span>
+                      
+                      <div className="p-4 bg-gradient-to-r from-purple-50 to-indigo-50 rounded-lg border border-purple-200">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm font-semibold text-gray-700">⚙️ Capacité Totale</span>
+                          <span className="text-2xl font-bold text-purple-600">{station.capacity}</span>
+                        </div>
+                        <p className="text-xs text-gray-600">Capacité maximale de la station</p>
                       </div>
-                      <div className="pt-2 border-t border-gray-200">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-sm text-gray-600">Occupancy</span>
-                          <span className="text-sm text-gray-900">
+
+                      <div className="pt-4 border-t-2 border-gray-200">
+                        <div className="flex items-center justify-between mb-3">
+                          <span className="text-sm font-bold text-gray-700">Taux d'Occupation</span>
+                          <span className="text-lg font-bold text-gray-900">
                             {Math.round((station.bikes / station.capacity) * 100)}%
                           </span>
                         </div>
-                        <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div className="w-full bg-gray-300 rounded-full h-3 overflow-hidden">
                           <div 
-                            className="h-2 rounded-full" 
+                            className="h-3 rounded-full transition-all duration-300 shadow-md" 
                             style={{ 
                               width: `${(station.bikes / station.capacity) * 100}%`,
-                              backgroundColor: getStatusColor(station.status)
+                              backgroundColor: getStatusColor(station.status),
+                              boxShadow: `0 0 8px ${getStatusColor(station.status)}`
                             }}
                           />
                         </div>
                       </div>
                     </div>
 
-                    <div className="flex gap-2">
-                      <Button size="sm" className="flex-1">View Details</Button>
-                      <Button size="sm" variant="outline">Directions</Button>
+                    <div className="flex gap-2 pt-4 border-t border-gray-200">
+                      <Button size="sm" className="flex-1 bg-purple-600 hover:bg-purple-700 text-white font-semibold">
+                        Détails
+                      </Button>
+                      <Button size="sm" className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold">
+                        Itinéraire
+                      </Button>
                     </div>
                   </Card>
                 );
               })()}
             </>
           ) : (
-            <Card className="p-6 text-center">
-              <MapPin className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-              <p className="text-sm text-gray-600">Click on a station marker to view details</p>
+            <Card className="p-6 border-0 shadow-md text-center">
+              <MapPin className="w-12 h-12 text-purple-400 mx-auto mb-4" />
+              <p className="text-gray-600 font-semibold">Sélectionnez une station</p>
+              <p className="text-sm text-gray-500 mt-2">Cliquez sur un marqueur sur la carte pour voir les détails</p>
             </Card>
           )}
 
-          {/* Arrondissement List */}
-          <Card className="p-4">
-            <h3 className="text-sm text-gray-900 mb-3">Arrondissements</h3>
-            <div className="space-y-2 max-h-96 overflow-y-auto">
-              {arrondissements.map((arr) => (
-                <div 
-                  key={arr.id} 
-                  className="flex items-center justify-between p-2 hover:bg-gray-50 rounded cursor-pointer"
-                >
-                  <div className="flex items-center gap-2">
-                    <div 
-                      className="w-3 h-3 rounded-full" 
-                      style={{ backgroundColor: arr.color }}
-                    />
-                    <span className="text-sm text-gray-900">{arr.name}</span>
-                  </div>
-                  <span className="text-xs text-gray-600">{arr.stations} stations</span>
-                </div>
-              ))}
-            </div>
-          </Card>
-
-          {/* Quick Stats */}
-          <Card className="p-4 bg-gradient-to-br from-blue-50 to-green-50">
+          {/* Legend */}
+          <Card className="p-5 border-0 shadow-md">
+            <p className="text-sm font-bold text-gray-900 mb-4">Légende des États</p>
             <div className="space-y-3">
-              <div>
-                <p className="text-xs text-gray-600">Active Stations</p>
-                <p className="text-2xl text-gray-900">1,487</p>
+              <div className="flex items-center gap-3 p-3 bg-green-50 rounded-lg border border-green-200">
+                <div className="w-4 h-4 rounded-full bg-gradient-to-br from-green-400 to-green-600" />
+                <div className="text-xs">
+                  <p className="font-semibold text-gray-900">Haute Disponibilité</p>
+                  <p className="text-gray-600">70%+ de vélos</p>
+                </div>
               </div>
-              <div>
-                <p className="text-xs text-gray-600">Coverage Area</p>
-                <p className="text-xl text-gray-900">105 km²</p>
+              <div className="flex items-center gap-3 p-3 bg-yellow-50 rounded-lg border border-yellow-200">
+                <div className="w-4 h-4 rounded-full bg-gradient-to-br from-yellow-400 to-yellow-600" />
+                <div className="text-xs">
+                  <p className="font-semibold text-gray-900">Disponibilité Moyenne</p>
+                  <p className="text-gray-600">30-70% de vélos</p>
+                </div>
               </div>
-              <div>
-                <p className="text-xs text-gray-600">Avg Distance</p>
-                <p className="text-xl text-gray-900">280m</p>
+              <div className="flex items-center gap-3 p-3 bg-red-50 rounded-lg border border-red-200">
+                <div className="w-4 h-4 rounded-full bg-gradient-to-br from-red-400 to-red-600" />
+                <div className="text-xs">
+                  <p className="font-semibold text-gray-900">Basse Disponibilité</p>
+                  <p className="text-gray-600">&lt;30% de vélos</p>
+                </div>
               </div>
             </div>
           </Card>
         </div>
+      </div>
       </div>
     </div>
   );

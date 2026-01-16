@@ -5,12 +5,14 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 export const API_ENDPOINTS = {
   // Dashboard
   liveDashboard: `${API_BASE_URL}/dashboard/live/`,
-  arrondissementSummary: `${API_BASE_URL}/dashboard/arrondissements/`,
+  velibRealtime: `${API_BASE_URL}/dashboard/live/`,
+  communeList: `${API_BASE_URL}/dashboard/communes-list/`,
+  communeSummary: `${API_BASE_URL}/dashboard/communes/`,
   
   // Arrondissements
-  arrondissements: `${API_BASE_URL}/arrondissements/`,
-  arrondissementDetail: (id: number) => `${API_BASE_URL}/arrondissements/${id}/`,
-  arrondissementAnalytics: (id: number) => `${API_BASE_URL}/arrondissements/${id}/analytics/`,
+  arrondissements: `${API_BASE_URL}/communes/`,
+  arrondissementDetail: (id: number) => `${API_BASE_URL}/communes/${id}/`,
+  arrondissementAnalytics: (id: number) => `${API_BASE_URL}/communes/${id}/analytics/`,
   
   // Stations
   stations: `${API_BASE_URL}/stations/`,

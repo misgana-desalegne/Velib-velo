@@ -6,7 +6,7 @@ from .arrondissement_views import CommuneViewSet
 from .station_views import BikeStationViewSet, StationStatusViewSet
 from .analytics_views import DailyAnalyticsViewSet
 from .analytics_api_views import AnalyticsViewSet, StationProfileViewSet
-from .dashboard_views import live_dashboard, commune_summary
+from .dashboard_views import live_dashboard, commune_summary, commune_list
 
 __all__ = [
     'CommuneViewSet',
@@ -17,4 +17,5 @@ __all__ = [
     'StationProfileViewSet',
     'live_dashboard',
     'commune_summary',
+    'commune_list',
 ]

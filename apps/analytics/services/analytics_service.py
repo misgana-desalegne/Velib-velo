@@ -4,8 +4,8 @@ This service handles dashboard statistics and analytics computations.
 """
 from django.utils import timezone
 from datetime import timedelta
-from ..models import BikeStation
-from .station_service import StationService
+from django.db.models import Sum, Avg, Count
+from ..models import BikeStation, StationStatus
 
 
 class AnalyticsService:
@@ -17,31 +17,48 @@ class AnalyticsService:
         Calculate live dashboard statistics.
         
         Returns:
-            dict: Dashboard statistics including stations, bikes, trips, etc.
+            dict: Dashboard statistics including stations, bikes, docks, etc.
         """
         # Get all stations count
         total_stations = BikeStation.objects.count()
         active_stations = BikeStation.objects.filter(is_installed=True).count()
         
-        # Get latest status for all active stations
-        stations_with_status = StationService.get_active_stations_with_status()
-        latest_statuses = [status for _, status in stations_with_status]
+        # Get latest status for each station (most recent record)
+        from django.db.models import Max, F
         
-        total_bikes = sum(s.available_bikes for s in latest_statuses)
-        total_docks = sum(s.available_docks for s in latest_statuses)
-        avg_utilization = sum(s.utilization_rate for s in latest_statuses) / len(latest_statuses) if latest_statuses else 0
+        latest_statuses = StationStatus.objects.filter(
+            station__is_installed=True
+        ).values('station').annotate(
+            max_timestamp=Max('timestamp')
+        ).values_list('station', flat=True)
         
-        # Get trips in last hour
-        one_hour_ago = timezone.now() - timedelta(hours=1)
-        current_trips = Trip.objects.filter(start_time__gte=one_hour_ago).count()
+        latest_status_records = StationStatus.objects.filter(
+            station__in=latest_statuses,
+            station__is_installed=True
+        ).select_related('station')
+        
+        # Calculate totals
+        total_bikes = 0
+        total_docks = 0
+        total_utilization = 0
+        utilization_count = 0
+        
+        for status in latest_status_records:
+            total_bikes += status.available_bikes
+            total_docks += status.available_docks
+            capacity = status.station.capacity if status.station.capacity > 0 else 1
+            util = (status.available_bikes / capacity) * 100
+            total_utilization += util
+            utilization_count += 1
+        
+        avg_utilization = total_utilization / utilization_count if utilization_count > 0 else 0
         
         return {
             'total_stations': total_stations,
             'active_stations': active_stations,
-            'total_bikes': total_bikes,
-            'total_docks': total_docks,
-            'current_trips': current_trips,
-            'avg_utilization': round(avg_utilization, 2),
+            'total_bikes': int(total_bikes),
+            'total_docks': int(total_docks),
+            'avg_utilization': round(avg_utilization / 100, 2),  # Return as decimal (0.0-1.0)
         }
     
     @staticmethod

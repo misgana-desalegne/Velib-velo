@@ -163,12 +163,20 @@ class BikeStationLoader:
                     longitude = 2.3522
                     logger.debug(f"Using default Paris coordinates for station {station_id}")
                 
-                # Get capacity
-                capacity = int(row[capacity_col]) if capacity_col in df.columns and pd.notna(row.get(capacity_col)) else 0
-                
                 # Get bike counts
                 mechanical = int(row[mechanical_col]) if mechanical_col in df.columns and pd.notna(row.get(mechanical_col)) else 0
                 electric = int(row[electric_col]) if electric_col in df.columns and pd.notna(row.get(electric_col)) else 0
+                
+                # Get available docks
+                docks_available = int(row['numdocksavailable']) if 'numdocksavailable' in df.columns and pd.notna(row.get('numdocksavailable')) else 0
+                
+                # Get capacity - if not provided, calculate as mechanical + electric + available docks
+                if capacity_col in df.columns and pd.notna(row.get(capacity_col)):
+                    capacity = int(row[capacity_col])
+                else:
+                    capacity = mechanical + electric + docks_available
+                    if capacity == 0:
+                        capacity = 0  # Fallback if no data available
                 
                 # Get operational status - handle yes/no strings and boolean values
                 is_installed = True

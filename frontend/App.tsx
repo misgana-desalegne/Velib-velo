@@ -112,7 +112,7 @@ export default function App() {
       );
     }
 
-    return <BackgroundShell>{content}</BackgroundShell>;
+    return <BackgroundShell showBackground={true}>{content}</BackgroundShell>;
   }
 
   // Render dashboard after authentication
@@ -146,5 +146,5 @@ export default function App() {
     </div>
   );
 
-  return <BackgroundShell>{content}</BackgroundShell>;
+  return <BackgroundShell showBackground={false}>{content}</BackgroundShell>;
 }

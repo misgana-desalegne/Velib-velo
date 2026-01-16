@@ -12,18 +12,14 @@ class CommuneSerializer(serializers.ModelSerializer):
 
 class BikeStationSerializer(serializers.ModelSerializer):
     commune_code = serializers.CharField(source='commune.code', read_only=True)
-    current_status = serializers.SerializerMethodField()
+    commune_name = serializers.CharField(source='commune.name', read_only=True)
     
     class Meta:
         model = BikeStation
-        fields = ['id', 'station_id', 'name', 'commune', 'commune_code', 
-                  'latitude', 'longitude', 'total_docks', 'is_active', 'current_status']
-    
-    def get_current_status(self, obj):
-        latest_status = obj.statuses.first()
-        if latest_status:
-            return StationStatusSerializer(latest_status).data
-        return None
+        fields = ['id', 'stationcode', 'name', 'commune_code', 'commune_name',
+                  'latitude', 'longitude', 'capacity', 'numbikesavailable', 
+                  'numdocksavailable', 'mechanical', 'ebike', 'is_installed', 
+                  'is_renting', 'is_returning', 'coordinates', 'profile']
 
 
 class StationStatusSerializer(serializers.ModelSerializer):
@@ -49,11 +45,12 @@ class DailyAnalyticsSerializer(serializers.ModelSerializer):
 
 class CommuneAnalyticsSerializer(serializers.Serializer):
     """Serializer for commune analytics summary"""
-    arr = serializers.CharField()
+    code = serializers.CharField()
+    name = serializers.CharField()
     stations = serializers.IntegerField()
     bikes = serializers.IntegerField()
     docks = serializers.IntegerField()
-    trips = serializers.IntegerField()
+    capacity = serializers.IntegerField()
     utilization = serializers.FloatField()
     population = serializers.IntegerField()
 
@@ -64,5 +61,4 @@ class LiveDashboardSerializer(serializers.Serializer):
     active_stations = serializers.IntegerField()
     total_bikes = serializers.IntegerField()
     total_docks = serializers.IntegerField()
-    current_trips = serializers.IntegerField()
     avg_utilization = serializers.FloatField()
