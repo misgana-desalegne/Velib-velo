@@ -333,7 +333,7 @@ export function VelibRealtimeStats() {
           {data && (
             <Tabs
               value={activeTab}
-              onValueChange={(v) => setActiveTab(v as 'overview' | 'zones' | 'explore')}
+              onValueChange={(v: string) => setActiveTab(v as 'overview' | 'zones' | 'explore')}
             >
               <TabsList className="mb-8 bg-gray-200/50 p-1 rounded-lg">
                 <TabsTrigger value="overview" className="data-[state=active]:bg-white data-[state=active]:shadow-md">
@@ -457,7 +457,7 @@ export function VelibRealtimeStats() {
                   </div>
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-2">Métrique</label>
-                    <Select value={metric} onValueChange={(v) => setMetric(v as MetricKey)}>
+                    <Select value={metric} onValueChange={(v: string) => setMetric(v as MetricKey)}>
                       <SelectTrigger className="w-full md:w-40">
                         <SelectValue />
                       </SelectTrigger>
