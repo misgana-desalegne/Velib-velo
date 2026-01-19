@@ -1,7 +1,24 @@
 
   # projet_velib
+Analyse les données en temps réel et historiques des stations de vélos en libre-service afin de fournir des informations sur les habitudes d'utilisation, les tendances de disponibilité et les performances des stations dans les arrondissements parisiens.
 
-  Velo station analysis
+## Tech Stack
+    Backend : Django (Python) avec API REST
+    Frontend : React + TypeScript (Vite)
+    Base de données : SQLite
+    Framework d’interface utilisateur : Composants Radix UI avec Tailwind CSS
+## Core Features
+    Pipeline ETL : Extraction automatique des données de l’API Vélib, nettoyage/transformation et chargement dans la base de données.
+    Tableau de bord en direct : Visualisation en temps réel de l’état des stations de vélos.
+    Analyses : Analyse statistique de la demande, de la disponibilité et des habitudes d’utilisation des vélos par arrondissement.
+    Planificateur : Automatisation des tâches en arrière-plan pour la collecte de données.
+    Authentification : Gestion des comptes utilisateurs et des équipes.
+    Cartes et visualisations : Représentation géographique des stations et des tendances des données.
+## Key Components
+    Application d'analyse : logique métier principale pour le traitement et l'analyse des données
+    Tableau de bord frontal : interface utilisateur interactive pour la visualisation des analyses et des données en temps réel
+    Services : analyses avancées, pipeline ETL, analyse de quartier
+    Système de développement : Vite pour un développement frontend rapide, Django pour l'API backend
 
   ## Running the code
         Run `npm i` to install the dependencies.
