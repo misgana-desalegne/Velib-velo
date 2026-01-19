@@ -1,5 +1,7 @@
 
-  # projet_velib
+# projet_velib
+Projet_velib est une plateforme d'analyse complète du système de vélos en libre-service Vélib' à Paris. Voici son fonctionnement :
+## But
 Analyse les données en temps réel et historiques des stations de vélos en libre-service afin de fournir des informations sur les habitudes d'utilisation, les tendances de disponibilité et les performances des stations dans les arrondissements parisiens.
 
 ## Tech Stack
@@ -19,13 +21,7 @@ Analyse les données en temps réel et historiques des stations de vélos en lib
     Tableau de bord frontal : interface utilisateur interactive pour la visualisation des analyses et des données en temps réel
     Services : analyses avancées, pipeline ETL, analyse de quartier
     Système de développement : Vite pour un développement frontend rapide, Django pour l'API backend
-
-  ## Running the code
-        Run `npm i` to install the dependencies.
-        Run `npm run dev` to start the development server
-        pip install requirements.txt
-        python manage.py runserver
-# Architecture 
+## Architecture 
     Projet_velib/
     ├── .git/
     ├── .gitignore
@@ -102,3 +98,9 @@ Analyse les données en temps réel et historiques des stations de vélos en lib
     ├── verify_data.py
     ├── setup.sh / setup.bat / setup.ps1
     └── Documentation files (*.md, *.html)
+## Pour essayer
+        Run `npm i` to install the dependencies.
+        Run `npm run dev` to start the React dev server
+        
+        pip install requirements.txt to install required libraries for the backend
+        python manage.py runserver to start the backend server
