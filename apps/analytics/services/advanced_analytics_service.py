@@ -23,8 +23,8 @@ class AdvancedAnalyticsService:
     """Service for advanced signal analysis and station profiling"""
     
     # Station profile thresholds
-    ENTROPY_THRESHOLD_LOW = 1.5  # Low entropy = predictable
-    ENTROPY_THRESHOLD_HIGH = 4.0  # High entropy = dynamic
+    ENTROPY_THRESHOLD_LOW = 1.5  # Low entropy = low functional
+    ENTROPY_THRESHOLD_HIGH = 4.0  # High entropy = high onal
     NET_FLUX_THRESHOLD = 5.0  # Bikes per day minimum to be considered source/sink
     GHOST_ENTROPY_MAX = 1.0
     GHOST_TURNOVER_MIN = 2  # Minimum average hourly delta magnitude

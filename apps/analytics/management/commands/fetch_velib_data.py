@@ -1,18 +1,19 @@
 """
-Management command to fetch and ingest real-time Vélib data from Paris Open Data API.
+Management command to fetch and sync Vélib data.
+
+This command provides a quick way to fetch real-time data and sync to database.
+For full ETL processing (with transformation), use: python manage.py run_etl_pipeline
 
 Usage:
     python manage.py fetch_velib_data                    # Fetch all stations
     python manage.py fetch_velib_data --limit 100        # Fetch first 100 stations
-    python manage.py fetch_velib_data --calculate-analytics  # Also calculate advanced metrics
 """
 
 from django.core.management.base import BaseCommand
 from apps.analytics.services.velib_data_ingestion import VelibDataIngestionService
-from apps.analytics.services.advanced_analytics_service import AdvancedAnalyticsService
-from apps.analytics.models import BikeStation, DailyAnalytics
-from django.utils import timezone
-from datetime import datetime
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class Command(BaseCommand):
@@ -24,30 +25,30 @@ class Command(BaseCommand):
             type=int,
             help='Limit number of stations to fetch'
         )
-        parser.add_argument(
-            '--calculate-analytics',
-            action='store_true',
-            help='Calculate advanced analytics after fetching'
-        )
     
     def handle(self, *args, **options):
         self.stdout.write(self.style.SUCCESS('\n' + '='*60))
-        self.stdout.write(self.style.SUCCESS('Vélib Data Ingestion'))
+        self.stdout.write(self.style.SUCCESS('Vélib Data Ingestion (Quick Fetch & Sync)'))
         self.stdout.write(self.style.SUCCESS('='*60 + '\n'))
         
-        # Fetch and sync data
         limit = options.get('limit')
+        
         try:
+            # Use unified service for fetch and sync
             summary = VelibDataIngestionService.fetch_and_sync(limit)
             
             self.stdout.write(self.style.SUCCESS('\n✓ Data ingestion completed!'))
             self.stdout.write(f"  Stations created: {summary.get('stations_created', 0)}")
             self.stdout.write(f"  Stations updated: {summary.get('stations_updated', 0)}")
             self.stdout.write(f"  Status records: {summary.get('statuses_created', 0)}")
-            self.stdout.write(f"  Errors: {summary.get('errors', 0)}")
+            
+            if summary.get('errors'):
+                self.stdout.write(self.style.WARNING(f"  Errors: {summary.get('errors', 0)}"))
             
         except Exception as e:
             self.stdout.write(self.style.ERROR(f'\n✗ Error during ingestion: {str(e)}'))
+            logger.exception("Error in fetch_velib_data command")
+
             return
         
         # Calculate analytics if requested
