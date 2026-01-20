@@ -117,7 +117,7 @@ class Command(BaseCommand):
         
         # Print summary
         self.stdout.write("\n" + "="*60)
-        self.stdout.write(self.style.SUCCESS(f"✓ Completed!"))
+        self.stdout.write(self.style.SUCCESS("Completed!"))
         self.stdout.write(f"Total records created: {total_records}")
         self.stdout.write(f"Errors: {error_count}")
         

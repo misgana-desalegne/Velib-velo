@@ -82,47 +82,35 @@ class AdvancedAnalyticsService:
         return deltas
     
     @staticmethod
-    def calculate_shannon_entropy(deltas: List[Dict]) -> float:
+    def calculate_coefficient_of_variation(availability_series: List[float]) -> float:
         """
-        Calculate Shannon Entropy of hourly deltas.
+        Calculate Coefficient of Variation (CV) of bike availability.
         
-        H = -Σ(p_i * log2(p_i))
+        CV = (std_dev / mean) * 100
         
-        Measures predictability:
-        - High entropy (4-8): Dynamic, unpredictable
-        - Low entropy (0-2): Stale, predictable
+        Measures predictability and activity:
+        - High CV (>40%): Highly active/unpredictable
+        - Medium CV (20-40%): Moderate activity
+        - Low CV (<20%): Ghost station/stale
+        - Mean=0: Ghost station (CV=0, marked as inactive)
         """
-        if not deltas or len(deltas) < 2:
+        if not availability_series or len(availability_series) < 2:
             return 0.0
         
-        # Normalize deltas into bins
-        delta_values = [d['delta'] for d in deltas]
+        mean_val = sum(availability_series) / len(availability_series)
         
-        if all(v == 0 for v in delta_values):
+        # If mean is 0, mark as ghost station
+        if mean_val == 0:
             return 0.0
         
-        min_delta = min(delta_values)
-        max_delta = max(delta_values)
+        # Calculate standard deviation
+        variance = sum((x - mean_val) ** 2 for x in availability_series) / len(availability_series)
+        std_dev = variance ** 0.5
         
-        if min_delta == max_delta:
-            return 0.0
+        # CV as percentage
+        cv = (std_dev / mean_val) * 100
         
-        # Create 5 bins
-        bins = [0] * 5
-        for delta in delta_values:
-            bin_idx = min(4, int((delta - min_delta) / (max_delta - min_delta + 1) * 5))
-            bins[bin_idx] += 1
-        
-        # Calculate entropy
-        total = len(delta_values)
-        entropy = 0.0
-        
-        for count in bins:
-            if count > 0:
-                p = count / total
-                entropy -= p * math.log2(p)
-        
-        return round(entropy, 2)
+        return round(cv, 2)
     
     @staticmethod
     def calculate_net_flux(deltas: List[Dict]) -> float:
@@ -156,15 +144,20 @@ class AdvancedAnalyticsService:
         return hours_full, hours_empty
     
     @staticmethod
-    def profile_station(entropy: float, net_flux: float, avg_delta_magnitude: float, 
+    def profile_station(cv: float, net_flux: float, avg_delta_magnitude: float, 
                        delta_morning: float, delta_evening: float) -> str:
         """
         Classify station profile based on signal analysis.
         
+        CV-based profiling:
+        - Ghost: CV=0 (mean=0) or very low activity
+        - Commuter: Strong morning/evening deltas
+        - Balanced: Low CV + neutral flux
+        
         Returns: profile type string
         """
-        # Ghost Station: Low entropy + Low turnover
-        if entropy <= AdvancedAnalyticsService.GHOST_ENTROPY_MAX and abs(avg_delta_magnitude) < 1.0:
+        # Ghost Station: CV=0 (mean is 0) + Low turnover
+        if cv == 0.0 and abs(avg_delta_magnitude) < 1.0:
             return 'ghost_station'
         
         # Check if it's a source or sink with clear morning/evening patterns
@@ -179,8 +172,8 @@ class AdvancedAnalyticsService:
         if has_morning_pattern and delta_morning > 2 and has_evening_pattern and delta_evening < -2:
             return 'commuter_sink'
         
-        # Balanced Hub: Low variance throughout day
-        if entropy > 2.0 or abs(net_flux) < AdvancedAnalyticsService.NET_FLUX_THRESHOLD:
+        # Balanced Hub: Low CV + neutral flux
+        if cv < 20.0 or abs(net_flux) < AdvancedAnalyticsService.NET_FLUX_THRESHOLD:
             return 'balanced_hub'
         
         return 'unknown'
@@ -211,7 +204,9 @@ class AdvancedAnalyticsService:
             return None
         
         # Core metrics
-        entropy = AdvancedAnalyticsService.calculate_shannon_entropy(deltas)
+        # Get availability series for CV calculation
+        availability_series = [s.available_bikes for s in statuses]
+        cv = AdvancedAnalyticsService.calculate_coefficient_of_variation(availability_series)
         net_flux = AdvancedAnalyticsService.calculate_net_flux(deltas)
         avg_hourly_delta = sum(d['delta'] for d in deltas) / len(deltas)
         avg_delta_magnitude = sum(abs(d['delta']) for d in deltas) / len(deltas)
@@ -228,7 +223,7 @@ class AdvancedAnalyticsService:
         
         # Profile classification
         profile = AdvancedAnalyticsService.profile_station(
-            entropy, net_flux, avg_delta_magnitude, delta_morning, delta_evening
+            cv, net_flux, avg_delta_magnitude, delta_morning, delta_evening
         )
         
         # Categorization
@@ -244,7 +239,7 @@ class AdvancedAnalyticsService:
         
         return {
             'average_hourly_delta': Decimal(str(round(avg_hourly_delta, 2))),
-            'shannon_entropy': Decimal(str(entropy)),
+            'shannon_entropy': Decimal(str(cv)),  # Now stores CV instead of entropy
             'net_flux': Decimal(str(round(net_flux, 2))),
             'persistence_at_full': hours_full,
             'persistence_at_empty': hours_empty,
@@ -272,9 +267,9 @@ class AdvancedAnalyticsService:
             station__isnull=False,
             is_source=True,
             date__gte=since
-        ).values('station__station_id', 'station__name').annotate(
+        ).values('station__stationcode', 'station__name').annotate(
             avg_net_flux=Avg('net_flux'),
-            avg_entropy=Avg('shannon_entropy'),
+            avg_cv=Avg('shannon_entropy'),
             days_as_source=Count('id')
         ).order_by('-avg_net_flux')[:limit]
         
@@ -282,9 +277,9 @@ class AdvancedAnalyticsService:
             station__isnull=False,
             is_sink=True,
             date__gte=since
-        ).values('station__station_id', 'station__name').annotate(
+        ).values('station__stationcode', 'station__name').annotate(
             avg_net_flux=Avg('net_flux'),
-            avg_entropy=Avg('shannon_entropy'),
+            avg_cv=Avg('shannon_entropy'),
             days_as_sink=Count('id')
         ).order_by('avg_net_flux')[:limit]
         
@@ -305,8 +300,8 @@ class AdvancedAnalyticsService:
             station__isnull=False,
             is_ghost=True,
             date__gte=since
-        ).values('station__station_id', 'station__name').annotate(
-            avg_entropy=Avg('shannon_entropy'),
+        ).values('station__stationcode', 'station__name').annotate(
+            avg_cv=Avg('shannon_entropy'),
             avg_daily_turnover=Avg('average_hourly_delta'),
             ghost_occurrences=Count('id')
         ).filter(

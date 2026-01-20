@@ -7,6 +7,35 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { api, API_ENDPOINTS } from '../../api/config';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import 'leaflet.markercluster/dist/MarkerCluster.css';
+import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
+
+// Extend Leaflet with marker cluster
+import 'leaflet.markercluster';
+
+// Paris Arrondissements with center coordinates
+const PARIS_ARRONDISSEMENTS = [
+  { num: 1, name: 'Louvre', lat: 48.8619, lng: 2.3356, color: '#FF6B6B' },
+  { num: 2, name: 'Bourse', lat: 48.8691, lng: 2.3394, color: '#4ECDC4' },
+  { num: 3, name: 'Temple', lat: 48.8634, lng: 2.3556, color: '#45B7D1' },
+  { num: 4, name: 'Hôtel-de-Ville', lat: 48.8552, lng: 2.3495, color: '#96CEB4' },
+  { num: 5, name: 'Panthéon', lat: 48.8445, lng: 2.3485, color: '#FFEAA7' },
+  { num: 6, name: 'Luxembourg', lat: 48.8494, lng: 2.3372, color: '#DDA15E' },
+  { num: 7, name: 'Palais-Bourbon', lat: 48.8550, lng: 2.3168, color: '#BC6C25' },
+  { num: 8, name: 'Élysée', lat: 48.8699, lng: 2.3077, color: '#C9ADA7' },
+  { num: 9, name: 'Opéra', lat: 48.8720, lng: 2.3325, color: '#9A8C98' },
+  { num: 10, name: 'Entrepôt', lat: 48.8686, lng: 2.3627, color: '#A23B72' },
+  { num: 11, name: 'Popincourt', lat: 48.8572, lng: 2.3813, color: '#F18F01' },
+  { num: 12, name: 'Reuilly', lat: 48.8359, lng: 2.4024, color: '#C73E1D' },
+  { num: 13, name: 'Gobelins', lat: 48.8270, lng: 2.3560, color: '#6A994E' },
+  { num: 14, name: 'Observatoire', lat: 48.8330, lng: 2.3330, color: '#BC4749' },
+  { num: 15, name: 'Vaugirard', lat: 48.8412, lng: 2.2888, color: '#2E8B9E' },
+  { num: 16, name: 'Passy', lat: 48.8633, lng: 2.2782, color: '#A4243B' },
+  { num: 17, name: 'Batignolles-Monceau', lat: 48.8799, lng: 2.3004, color: '#6A4C93' },
+  { num: 18, name: 'Butte-Montmartre', lat: 48.8867, lng: 2.3431, color: '#D291BC' },
+  { num: 19, name: 'Buttes-Chaumont', lat: 48.8831, lng: 2.3844, color: '#FED9B7' },
+  { num: 20, name: 'Ménilmontant', lat: 48.8637, lng: 2.4007, color: '#F77F00' },
+];
 
 // Helper function to determine status based on utilization
 const getStatusFromUtilization = (bikes: number, docks: number): string => {
@@ -22,13 +51,16 @@ export function MapAnalysis() {
   const [stations, setStations] = useState<any[]>([]);
   const [selectedStation, setSelectedStation] = useState<number | null>(null);
   const [filterStatus, setFilterStatus] = useState('all');
-  const [filterProfile, setFilterProfile] = useState('all');
-  const [showHeatmap, setShowHeatmap] = useState(false);
+  const [filterCommune, setFilterCommune] = useState('all');
+  const [showGhostStations, setShowGhostStations] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [arrondissements, setArrondissements] = useState<any[]>([]);
+  const [mapZoom, setMapZoom] = useState(12);
   const mapRef = useRef<any>(null);
   const markersRef = useRef<any>({});
+  const clusterGroupRef = useRef<any>(null);
+  const arrondissementLayersRef = useRef<any>({});
 
   useEffect(() => {
     const fetchStations = async () => {
@@ -36,14 +68,37 @@ export function MapAnalysis() {
         setLoading(true);
         setError(null);
         
-        // Fetch real stations from API (limit to first 500 for performance on map)
-        const response = await api.get(`${API_ENDPOINTS.stations}?limit=500`);
+        // Fetch all stations from API - handle pagination
+        let allStations: any[] = [];
+        let nextUrl: string | null = API_ENDPOINTS.stations;
         
-        // API returns paginated response with results property
-        const stationsList = response.results || response;
+        // Collect all paginated results
+        while (nextUrl) {
+          try {
+            const response = await api.get(nextUrl);
+            
+            // Handle paginated response
+            if (response.results && Array.isArray(response.results)) {
+              allStations = allStations.concat(response.results);
+              nextUrl = response.next || null;
+            } else if (Array.isArray(response)) {
+              // Direct array response
+              allStations = response;
+              nextUrl = null;
+            } else {
+              throw new Error('Unexpected response format');
+            }
+          } catch (pageErr) {
+            console.error('Error fetching page:', pageErr);
+            if (allStations.length === 0) {
+              throw pageErr;
+            }
+            break; // Continue with what we have
+          }
+        }
         
-        if (Array.isArray(stationsList)) {
-          const transformedStations = stationsList.map((s: any, idx: number) => {
+        if (allStations.length > 0) {
+          const transformedStations = allStations.map((s: any, idx: number) => {
             // Use mechanical + ebike since numbikesavailable is always 0
             const bikes = (s.mechanical || 0) + (s.ebike || 0);
             const capacity = s.capacity || 1;
@@ -58,15 +113,14 @@ export function MapAnalysis() {
               docks: capacity - bikes, // Remaining capacity
               capacity: capacity,
               status: status,
-              arr: s.commune_name || s.commune || `Commune ${s.id}`,
-              profile: s.profile || 'unknown',
+              arr: s.commune_name || s.commune || `Commune ${s.id}`,              communeCode: s.commune_code || '',              profile: s.profile || 'unknown',
               isGhost: s.profile === 'ghost_station',
             };
           });
           
           setStations(transformedStations);
         } else {
-          setError('Failed to parse station data');
+          setError('No stations found');
           setStations([]);
         }
       } catch (err) {
@@ -89,9 +143,10 @@ export function MapAnalysis() {
         if (Array.isArray(communes)) {
           const colors = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#14b8a6', '#f97316', '#6366f1', '#84cc16', '#22d3ee', '#a855f7', '#ef4444'];
           setArrondissements(communes.map((c: any, idx: number) => ({
-            id: c.id,
+            id: c.code || c.id,
+            code: c.code || '',
             name: c.name || c.commune,
-            stations: c.station_count || 0,
+            stations: c.stations || 0,
             color: colors[idx % colors.length],
           })));
         }
@@ -121,8 +176,14 @@ export function MapAnalysis() {
 
   const filteredStations = stations.filter(s => {
     const statusMatch = filterStatus === 'all' || s.status === filterStatus;
-    const profileMatch = filterProfile === 'all' || s.profile === filterProfile;
-    return statusMatch && profileMatch;
+    const communeMatch = filterCommune === 'all' || s.arr === filterCommune;
+    const ghostMatch = showGhostStations || !s.isGhost;
+    
+    if (filterCommune !== 'all' && !communeMatch) {
+      // Debug: Log if commune filtering is excluding stations
+    }
+    
+    return statusMatch && communeMatch && ghostMatch;
   });
 
   // Initialize Leaflet map
@@ -143,21 +204,138 @@ export function MapAnalysis() {
       }).addTo(map);
 
       mapRef.current = map;
+
+      // Add zoom listener for arrondissement details
+      map.on('zoom', () => {
+        const zoom = map.getZoom();
+        setMapZoom(zoom);
+        updateArrondissementDisplay(map, zoom);
+      });
+
+      // Initial display
+      updateArrondissementDisplay(map, 12);
     }
   }, []);
 
-  // Update markers when filtered stations change
+  // Update arrondissement display based on zoom level
+  const updateArrondissementDisplay = (map: any, zoom: number) => {
+    // Clear existing layers
+    Object.values(arrondissementLayersRef.current).forEach((layers: any) => {
+      if (Array.isArray(layers)) {
+        layers.forEach((layer: any) => map.removeLayer(layer));
+      } else {
+        map.removeLayer(layers);
+      }
+    });
+    arrondissementLayersRef.current = {};
+
+    // Only show details when zoomed in very close (zoom 16+)
+    const isZoomedInClose = zoom >= 16;
+
+    PARIS_ARRONDISSEMENTS.forEach((arr) => {
+      if (isZoomedInClose) {
+        // Very zoomed in: Show circles and detailed labels
+        const circle = L.circle([arr.lat, arr.lng], {
+          radius: 800,
+          color: arr.color,
+          weight: 2,
+          opacity: 0.3,
+          fillOpacity: 0.05,
+          dashArray: '5, 5'
+        }).addTo(map);
+
+        const label = L.marker([arr.lat, arr.lng], {
+          icon: L.divIcon({
+            html: `
+              <div style="
+                background-color: ${arr.color};
+                color: white;
+                border-radius: 50%;
+                width: 40px;
+                height: 40px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-weight: bold;
+                font-size: 16px;
+                border: 2px solid white;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+                flex-direction: column;
+              ">
+                <div style="font-size: 14px;">${arr.num}</div>
+                <div style="font-size: 10px; line-height: 1;">${arr.name.split('-')[0]}</div>
+              </div>
+            `,
+            iconSize: [40, 40],
+            iconAnchor: [20, 20],
+            className: 'arrondissement-label'
+          })
+        }).addTo(map);
+
+        arrondissementLayersRef.current[arr.num] = [circle, label];
+      }
+      // No display when zoomed out - keep map clean
+    });
+  };
+
+  // Update markers when filtered stations change - uses clustering
   useEffect(() => {
     if (!mapRef.current) return;
 
-    // Clear existing markers
-    Object.values(markersRef.current).forEach((marker: any) => {
-      marker.remove();
-    });
-    markersRef.current = {};
+    // Clear existing cluster group
+    if (clusterGroupRef.current) {
+      mapRef.current.removeLayer(clusterGroupRef.current);
+    }
 
-    // Add new markers for filtered stations
+    // Create new cluster group with optimized settings
+    const markerClusterGroup = (L as any).markerClusterGroup({
+      maxClusterRadius: 80, // Distance in pixels for clustering
+      iconCreateFunction: (cluster: any) => {
+        const count = cluster.getChildCount();
+        let size = 'small';
+        let radius = 25;
+        let fontSize = 12;
+        
+        if (count > 100) {
+          size = 'large';
+          radius = 35;
+          fontSize = 16;
+        } else if (count > 30) {
+          size = 'medium';
+          radius = 30;
+          fontSize = 14;
+        }
+
+        return L.divIcon({
+          html: `
+            <div style="
+              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+              color: white;
+              border-radius: 50%;
+              width: ${radius * 2}px;
+              height: ${radius * 2}px;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              font-weight: bold;
+              font-size: ${fontSize}px;
+              border: 2px solid white;
+              box-shadow: 0 3px 8px rgba(0,0,0,0.3);
+            ">
+              ${count}
+            </div>
+          `,
+          iconSize: [radius * 2, radius * 2],
+          iconAnchor: [radius, radius],
+          popupAnchor: [0, -radius],
+          className: 'station-cluster'
+        });
+      }
+    });
+
+    // Add filtered stations to cluster group
     filteredStations.forEach((station) => {
+
       const statusColor = getStatusColor(station.status);
       const isGhost = station.isGhost;
       const markerColor = isGhost ? '#9ca3af' : statusColor;
@@ -233,7 +411,7 @@ export function MapAnalysis() {
               transition: width 0.3s;
             "></div>
           </div>
-          ${isGhost ? '<div style="margin-top: 12px; padding: 8px; background-color: #fee2e2; border: 1px solid #fca5a5; border-radius: 4px; color: #991b1b; font-weight: bold; font-size: 11px;">⚠️ Station Fantôme - Comportement Imprévisible</div>' : ''}
+          ${isGhost ? '<div style="margin-top: 12px; padding: 8px; background-color: #fee2e2; border: 1px solid #fca5a5; border-radius: 4px; color: #991b1b; font-weight: bold; font-size: 11px;">👻 La station phantom, pas de activity</div>' : ''}
           <div style="margin-top: 12px; padding: 8px; background-color: ${station.status === 'high' ? '#dcfce7' : station.status === 'medium' ? '#fef3c7' : '#fee2e2'}; border-radius: 4px; text-align: center; font-weight: bold; font-size: 12px; color: ${station.status === 'high' ? '#166534' : station.status === 'medium' ? '#92400e' : '#991b1b'};">
             État: ${station.status === 'high' ? '✅ Haute Disponibilité' : station.status === 'medium' ? '⚠️ Disponibilité Moyenne' : '❌ Basse Disponibilité'}
           </div>
@@ -242,11 +420,16 @@ export function MapAnalysis() {
 
       const marker = L.marker([station.lat, station.lng], { icon })
         .bindPopup(popupContent, { maxWidth: 280 })
-        .addTo(mapRef.current)
         .on('click', () => setSelectedStation(station.id));
 
+      // Add marker to cluster group instead of directly to map
+      markerClusterGroup.addLayer(marker);
       markersRef.current[station.id] = marker;
     });
+
+    // Add cluster group to map
+    mapRef.current.addLayer(markerClusterGroup);
+    clusterGroupRef.current = markerClusterGroup;
   }, [filteredStations]);
 
   return (
@@ -274,8 +457,8 @@ export function MapAnalysis() {
       </div>
 
       <div className="px-8 py-8">
-      {/* Controls */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 mb-6">
+      {/* Controls - Status, Commune, and Ghost Stations Filters */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
         <Card className="p-4 border-0 shadow-md">
           <label className="block text-sm font-semibold text-gray-700 mb-3">Filtrer par État</label>
           <Select value={filterStatus} onValueChange={setFilterStatus}>
@@ -293,50 +476,39 @@ export function MapAnalysis() {
         </Card>
 
         <Card className="p-4 border-0 shadow-md">
-          <label className="block text-sm font-semibold text-gray-700 mb-3">Profil de Station</label>
-          <Select value={filterProfile} onValueChange={setFilterProfile}>
+          <label className="block text-sm font-semibold text-gray-700 mb-3">Filtrer par Commune</label>
+          <Select value={filterCommune} onValueChange={setFilterCommune}>
             <SelectTrigger className="border border-gray-300">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Tous les Profils</SelectItem>
-              <SelectItem value="ghost_station">🚫 Stations Fantômes</SelectItem>
-              <SelectItem value="commuter_source">📤 Sources (Distributeurs)</SelectItem>
-              <SelectItem value="commuter_sink">📥 Puits (Attracteurs)</SelectItem>
-              <SelectItem value="balanced_hub">⚖️ Hubs Équilibrés</SelectItem>
+              <SelectItem value="all">Toutes les Communes</SelectItem>
+              {arrondissements.map((arr) => (
+                <SelectItem key={arr.code || arr.id} value={arr.name}>
+                  {arr.name} ({arr.stations} stations)
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </Card>
 
         <Card className="p-4 border-0 shadow-md">
-          <label className="block text-sm font-semibold text-gray-700 mb-3">Couche Cartographique</label>
-          <Select defaultValue="standard">
-            <SelectTrigger className="border border-gray-300">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="standard">Standard</SelectItem>
-              <SelectItem value="satellite">Satellite</SelectItem>
-              <SelectItem value="terrain">Terrain</SelectItem>
-            </SelectContent>
-          </Select>
+          <label className="block text-sm font-semibold text-gray-700 mb-3">Stations Fantômes</label>
+          <Button 
+            onClick={() => setShowGhostStations(!showGhostStations)}
+            className={`w-full py-2 px-4 rounded-lg font-medium transition-all ${
+              showGhostStations 
+                ? 'bg-red-500 text-white hover:bg-red-600' 
+                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+            }`}
+          >
+            {showGhostStations ? '👻 Affichées' : '👻 Masquées'}
+          </Button>
         </Card>
+      </div>
 
-        <Card className="p-4 border-0 shadow-md">
-          <label className="block text-sm font-semibold text-gray-700 mb-3">Superposition</label>
-          <div className="flex items-center gap-3 p-2 bg-gradient-to-r from-purple-50 to-indigo-50 rounded-lg border border-purple-200">
-            <input 
-              type="checkbox" 
-              checked={showHeatmap}
-              onChange={(e) => setShowHeatmap(e.target.checked)}
-              className="rounded border border-purple-300 accent-purple-600"
-              id="heatmap"
-            />
-            <label htmlFor="heatmap" className="text-sm font-medium text-gray-700 cursor-pointer">Afficher Heatmap</label>
-          </div>
-        </Card>
-
-        <Card className={`p-4 border-0 shadow-md ${error ? 'bg-red-50 border border-red-300' : loading ? 'bg-blue-50 border border-blue-200' : 'bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200'}`}>
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-6">
+        <Card className={`p-4 border-0 shadow-md col-span-full ${error ? 'bg-red-50 border border-red-300' : loading ? 'bg-blue-50 border border-blue-200' : 'bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200'}`}>
           {loading ? (
             <div>
               <div className="w-6 h-6 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mb-2"></div>
@@ -349,8 +521,8 @@ export function MapAnalysis() {
             </div>
           ) : (
             <>
-              <p className="text-sm font-bold text-gray-900">{filteredStations.length} stations</p>
-              <p className="text-xs text-gray-600 mt-1">sur {stations.length} au total</p>
+              <p className="text-sm font-bold text-gray-900">{filteredStations.length} stations affichées</p>
+              <p className="text-xs text-gray-600 mt-1">sur {stations.length} stations au total • Zoom niveau: {mapZoom}</p>
             </>
           )}
         </Card>
@@ -488,87 +660,7 @@ export function MapAnalysis() {
             </div>
           </Card>
         </div>
-      </div>
-
-      {/* Stations Table */}
-      <div className="mt-8">
-        <Card className="p-0 border-0 shadow-lg overflow-hidden">
-          <div className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white px-6 py-4">
-            <h3 className="text-lg font-bold flex items-center gap-2">
-              <Bike className="w-5 h-5" />
-              Détail des Stations ({filteredStations.length})
-            </h3>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-100 border-b-2 border-gray-300">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-bold text-gray-700">Station</th>
-                  <th className="px-6 py-3 text-left text-xs font-bold text-gray-700">Commune</th>
-                  <th className="px-6 py-3 text-center text-xs font-bold text-gray-700">🚲 Vélos</th>
-                  <th className="px-6 py-3 text-center text-xs font-bold text-gray-700">📍 Places</th>
-                  <th className="px-6 py-3 text-center text-xs font-bold text-gray-700">Occupation</th>
-                  <th className="px-6 py-3 text-left text-xs font-bold text-gray-700">État</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredStations.map((station, idx) => (
-                  <tr 
-                    key={station.id} 
-                    className={`border-b border-gray-200 hover:bg-purple-50 transition cursor-pointer ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}
-                    onClick={() => setSelectedStation(station.id)}
-                  >
-                    <td className="px-6 py-4">
-                      <div className="font-semibold text-gray-900">{station.name}</div>
-                      {station.isGhost && <span className="text-xs text-red-600 font-bold">⚠️ Ghost</span>}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-600">{station.arr}</td>
-                    <td className="px-6 py-4 text-center">
-                      <span className="inline-block bg-green-100 text-green-800 px-3 py-1 rounded-full font-bold text-sm">
-                        {station.bikes}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-center">
-                      <span className="inline-block bg-blue-100 text-blue-800 px-3 py-1 rounded-full font-bold text-sm">
-                        {station.docks}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-center">
-                      <div className="flex items-center justify-center gap-2">
-                        <div className="w-16 bg-gray-300 rounded-full h-2 overflow-hidden">
-                          <div 
-                            className="h-2 rounded-full" 
-                            style={{ 
-                              width: `${(station.bikes / station.capacity) * 100}%`,
-                              backgroundColor: getStatusColor(station.status)
-                            }}
-                          />
-                        </div>
-                        <span className="text-sm font-bold text-gray-900 min-w-[40px]">
-                          {Math.round((station.bikes / station.capacity) * 100)}%
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <Badge className={`px-3 py-1 font-bold text-xs ${
-                        station.status === 'high' ? 'bg-gradient-to-r from-green-100 to-emerald-100 text-green-700' :
-                        station.status === 'medium' ? 'bg-gradient-to-r from-yellow-100 to-amber-100 text-yellow-700' :
-                        'bg-gradient-to-r from-red-100 to-pink-100 text-red-700'
-                      }`}>
-                        {station.status === 'high' ? '✅ Haute' : station.status === 'medium' ? '⚠️ Moyenne' : '❌ Basse'}
-                      </Badge>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {filteredStations.length === 0 && (
-              <div className="p-8 text-center text-gray-500">
-                Aucune station ne correspond aux filtres sélectionnés
-              </div>
-            )}
-          </div>
-        </Card>
+        <div className="hidden lg:block gap-12 p-4">{/* Spacer for layout alignment */}</div>
       </div>
       </div>
     </div>

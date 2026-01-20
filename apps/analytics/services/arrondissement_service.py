@@ -61,17 +61,34 @@ class CommuneService:
             # Fallback to capacity-based calculation if no dock data available
             avg_utilization = round(min((total_bikes / total_capacity) * 100, 100), 2)
         
-        # Calculate average entropy from daily analytics
+        # Calculate average CV (Coefficient of Variation) from daily analytics
+        # Try today first, then fall back to latest available date
+        from django.db.models import Q
         today = timezone.now().date()
+        
+        avg_cv = 0
+        # First try today's data
         daily_analytics = DailyAnalytics.objects.filter(
             station__commune=commune,
             date=today
         )
         
-        avg_entropy = 0
+        # If no data for today, get the latest available date
+        if not daily_analytics.exists():
+            latest_date = DailyAnalytics.objects.filter(
+                station__commune=commune
+            ).values_list('date', flat=True).order_by('-date').first()
+            
+            if latest_date:
+                daily_analytics = DailyAnalytics.objects.filter(
+                    station__commune=commune,
+                    date=latest_date
+                )
+        
         if daily_analytics.exists():
-            entropy_data = daily_analytics.aggregate(Avg('shannon_entropy'))
-            avg_entropy = round(entropy_data['shannon_entropy__avg'] or 0, 2)
+            cv_data = daily_analytics.aggregate(Avg('shannon_entropy'))
+            avg_cv = round(cv_data['shannon_entropy__avg'] or 0, 2)
+        
         
         return {
             'code': commune.code,
@@ -81,7 +98,7 @@ class CommuneService:
             'docks': total_docks,
             'capacity': total_capacity,
             'utilization': avg_utilization,
-            'entropy': avg_entropy,
+            'cv': avg_cv,
             'population': commune.population,
         }
     
@@ -101,6 +118,6 @@ class CommuneService:
             if analytics['stations'] > 0:  # Only include communes with stations
                 results.append(analytics)
         
-        # Sort by entropy descending (highest entropy first = most dynamic/unpredictable)
-        results.sort(key=lambda x: x['entropy'], reverse=True)
+        # Sort by CV descending (highest CV first = most variable/dynamic)
+        results.sort(key=lambda x: x['cv'], reverse=True)
         return results
