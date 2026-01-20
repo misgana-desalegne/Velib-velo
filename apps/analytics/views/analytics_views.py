@@ -15,7 +15,7 @@ class DailyAnalyticsViewSet(viewsets.ReadOnlyModelViewSet):
     ViewSet for DailyAnalytics model (read-only).
     Provides access to aggregated daily analytics data.
     """
-    queryset = DailyAnalytics.objects.select_related('arrondissement', 'station').all()
+    queryset = DailyAnalytics.objects.select_related('commune', 'station').all()
     serializer_class = DailyAnalyticsSerializer
     
     def get_queryset(self):

@@ -9,43 +9,43 @@ import { Badge } from '../../shared/ui/badge';
 import { api, API_ENDPOINTS } from '../../api/config';
 
 // Default/sample data for when API data isn't available
-// Updated to use Flux (Flux de Transit) and Entropy (Entropie Shannon)
+// Updated to use Flux (Flux de Transit) and CV (Coefficient de Variation)
 const getDefaultHourlyData = () => Array.from({ length: 24 }, (_, i) => ({
   hour: `${String(i).padStart(2, '0')}:00`,
   bikes: Math.floor(20 + Math.random() * 30),
   docks: Math.floor(15 + Math.random() * 35),
   // Flux: Rate of change (positive = source, negative = sink)
   flux: Math.floor(-10 + Math.random() * 20),
-  // Entropy: Predictability measure (0 = predictable, 8 = highly dynamic)
-  entropy: parseFloat((Math.random() * 4 + 1).toFixed(2)),
+  // CV: Activity Variability (0% = no activity, 0-20% = stale, 20-40% = moderate, >40% = highly active)
+  cv: parseFloat((Math.random() * 40 + 10).toFixed(2)),
 }));
 
 const getDefaultWeeklyData = () => [
-  { day: 'Lun', avgBikes: 22, peakBikes: 42, avgFlux: 2.5, avgEntropy: 2.1 },
-  { day: 'Mar', avgBikes: 24, peakBikes: 45, avgFlux: 3.1, avgEntropy: 2.3 },
-  { day: 'Mer', avgBikes: 23, peakBikes: 44, avgFlux: 1.8, avgEntropy: 2.0 },
-  { day: 'Jeu', avgBikes: 25, peakBikes: 46, avgFlux: 2.9, avgEntropy: 2.4 },
-  { day: 'Ven', avgBikes: 28, peakBikes: 48, avgFlux: 4.2, avgEntropy: 2.8 },
-  { day: 'Sam', avgBikes: 32, peakBikes: 45, avgFlux: 5.1, avgEntropy: 3.2 },
-  { day: 'Dim', avgBikes: 30, peakBikes: 42, avgFlux: 4.5, avgEntropy: 3.0 },
+  { day: 'Lun', avgBikes: 22, peakBikes: 42, avgFlux: 2.5, avgCV: 21.0 },
+  { day: 'Mar', avgBikes: 24, peakBikes: 45, avgFlux: 3.1, avgCV: 23.0 },
+  { day: 'Mer', avgBikes: 23, peakBikes: 44, avgFlux: 1.8, avgCV: 20.0 },
+  { day: 'Jeu', avgBikes: 25, peakBikes: 46, avgFlux: 2.9, avgCV: 24.0 },
+  { day: 'Ven', avgBikes: 28, peakBikes: 48, avgFlux: 4.2, avgCV: 28.0 },
+  { day: 'Sam', avgBikes: 32, peakBikes: 45, avgFlux: 5.1, avgCV: 32.0 },
+  { day: 'Dim', avgBikes: 30, peakBikes: 42, avgFlux: 4.5, avgCV: 30.0 },
 ];
 
 const getDefaultMonthlyData = () => [
-  { date: 'Sem 1', bikes: 1245, flux: 12.5, entropy: 2.1 },
-  { date: 'Sem 2', bikes: 1389, flux: 15.3, entropy: 2.3 },
-  { date: 'Sem 3', bikes: 1423, flux: 13.8, entropy: 2.2 },
-  { date: 'Sem 4', bikes: 1156, flux: 10.2, entropy: 1.9 },
-  { date: 'Sem 5', bikes: 1534, flux: 18.5, entropy: 2.6 },
+  { date: 'Sem 1', bikes: 1245, flux: 12.5, cv: 21.0 },
+  { date: 'Sem 2', bikes: 1389, flux: 15.3, cv: 23.0 },
+  { date: 'Sem 3', bikes: 1423, flux: 13.8, cv: 22.0 },
+  { date: 'Sem 4', bikes: 1156, flux: 10.2, cv: 19.0 },
+  { date: 'Sem 5', bikes: 1534, flux: 18.5, cv: 26.0 },
 ];
 
 // Default popular stations - Updated with analytical metrics
 const getDefaultPopularStations = () => [
-  { name: 'Gare du Nord', entropy: 3.8, flux: 12.5, profile: 'commuter_sink', trend: 'up' },
-  { name: 'Champs-Élysées', entropy: 4.2, flux: 8.3, profile: 'balanced_hub', trend: 'up' },
-  { name: 'Bastille', entropy: 3.5, flux: -5.2, profile: 'commuter_source', trend: 'down' },
-  { name: 'Luxembourg', entropy: 2.9, flux: 2.1, profile: 'balanced_hub', trend: 'up' },
-  { name: 'République', entropy: 3.6, flux: -8.5, profile: 'commuter_source', trend: 'stable' },
-  { name: 'Montparnasse', entropy: 4.1, flux: 6.8, profile: 'balanced_hub', trend: 'up' },
+  { name: 'Gare du Nord', cv: 38.0, flux: 12.5, profile: 'commuter_sink', trend: 'up' },
+  { name: 'Champs-Élysées', cv: 42.0, flux: 8.3, profile: 'balanced_hub', trend: 'up' },
+  { name: 'Bastille', cv: 35.0, flux: -5.2, profile: 'commuter_source', trend: 'down' },
+  { name: 'Luxembourg', cv: 29.0, flux: 2.1, profile: 'balanced_hub', trend: 'up' },
+  { name: 'République', cv: 36.0, flux: -8.5, profile: 'commuter_source', trend: 'stable' },
+  { name: 'Montparnasse', cv: 41.0, flux: 6.8, profile: 'balanced_hub', trend: 'up' },
 ];
 
 export function StationBehavior() {
@@ -433,12 +433,12 @@ export function StationBehavior() {
 
       {/* Main Charts */}
       <div className="grid grid-cols-1 gap-6 mb-8">
-        {/* 24-Hour Behavior - Flux and Entropy Analysis */}
+        {/* 24-Hour Behavior - Flux and CV Analysis */}
         <Card className="p-6 border-0 shadow-md">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-bold text-gray-900">Analyse Temporelle 24h</h3>
           </div>
-          <p className="text-sm text-gray-600 mb-5">Flux de Transit (variation du nombre de vélos) et Entropie Shannon (prévisibilité)</p>
+          <p className="text-sm text-gray-600 mb-5">Flux de Transit (variation du nombre de vélos) et Coefficient de Variation (variabilité d'activité)</p>
           <div className="relative">
             <ResponsiveContainer width="100%" height={350}>
             <AreaChart data={dailyBehaviorData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
@@ -461,7 +461,7 @@ export function StationBehavior() {
               <Area yAxisId="left" type="monotone" dataKey="bikes" stackId="1" stroke="#10b981" fillOpacity={1} fill="url(#dailyBikes)" name="Vélos Disponibles" />
               <Area yAxisId="left" type="monotone" dataKey="docks" stackId="1" stroke="#3b82f6" fillOpacity={1} fill="url(#dailyDocks)" name="Places Disponibles" />
               <Line yAxisId="right" type="monotone" dataKey="flux" stroke="#ef4444" strokeWidth={2} name="Flux de Transit (Δ vélos)" dot={{ fill: '#ef4444', r: 3 }} />
-              <Line yAxisId="right" type="monotone" dataKey="entropy" stroke="#8b5cf6" strokeWidth={2} name="Entropie Shannon" dot={{ fill: '#8b5cf6', r: 3 }} strokeDasharray="5 5" />
+              <Line yAxisId="right" type="monotone" dataKey="cv" stroke="#8b5cf6" strokeWidth={2} name="CV (%)" dot={{ fill: '#8b5cf6', r: 3 }} strokeDasharray="5 5" />
                 <button
               onClick={() => handleExplanationClick('daily')}
               className="absolute bottom-2 right-6 z-[100] px-3 py-2 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-semibold text-xs rounded-lg flex items-center gap-1 transition-all duration-200 hover:shadow-lg cursor-pointer"
@@ -522,7 +522,7 @@ export function StationBehavior() {
                   <stop offset="0%" stopColor="#ef4444" stopOpacity={0.8}/>
                   <stop offset="100%" stopColor="#ef4444" stopOpacity={0.3}/>
                 </linearGradient>
-                <linearGradient id="weekEntropy" x1="0" y1="0" x2="0" y2="1">
+                <linearGradient id="weekCV" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="#8b5cf6" stopOpacity={0.8}/>
                   <stop offset="100%" stopColor="#8b5cf6" stopOpacity={0.3}/>
                 </linearGradient>
@@ -534,7 +534,7 @@ export function StationBehavior() {
               <Tooltip contentStyle={{ backgroundColor: '#1f2937', border: 'none', borderRadius: '8px', color: '#fff' }} />
               <Legend wrapperStyle={{ paddingTop: '20px' }} />
               <Bar yAxisId="left" dataKey="avgFlux" fill="url(#weekFlux)" name="Flux de Transit Moyen" />
-              <Line yAxisId="right" type="monotone" dataKey="avgEntropy" stroke="#8b5cf6" strokeWidth={2} name="Entropie Moyenne" dot={{ fill: '#8b5cf6', r: 5 }} />
+              <Line yAxisId="right" type="monotone" dataKey="avgCV" stroke="#8b5cf6" strokeWidth={2} name="CV Moyenne (%)" dot={{ fill: '#8b5cf6', r: 5 }} />
             </BarChart>
           </ResponsiveContainer>
             <button
@@ -547,7 +547,7 @@ export function StationBehavior() {
           </div>
         </Card>
 
-        {/* Monthly Trend - Flux and Entropy Evolution */}
+        {/* Monthly Trend - Flux and CV Evolution */}
         <Card className="p-6 border-0 shadow-md">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-bold text-gray-900">Tendance Mensuelle</h3>
@@ -561,7 +561,7 @@ export function StationBehavior() {
                   <stop offset="0%" stopColor="#ef4444" stopOpacity={0.3}/>
                   <stop offset="100%" stopColor="#ef4444" stopOpacity={0}/>
                 </linearGradient>
-                <linearGradient id="monthEntropy" x1="0" y1="0" x2="0" y2="1">
+                <linearGradient id="monthCV" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="#8b5cf6" stopOpacity={0.3}/>
                   <stop offset="100%" stopColor="#8b5cf6" stopOpacity={0}/>
                 </linearGradient>
@@ -573,7 +573,7 @@ export function StationBehavior() {
               <Tooltip contentStyle={{ backgroundColor: '#1f2937', border: 'none', borderRadius: '8px', color: '#fff' }} />
               <Legend wrapperStyle={{ paddingTop: '20px' }} />
               <Line yAxisId="left" type="monotone" dataKey="flux" stroke="#ef4444" strokeWidth={3} name="Flux de Transit Total" dot={{ fill: '#ef4444', r: 5 }} />
-              <Line yAxisId="right" type="monotone" dataKey="entropy" stroke="#8b5cf6" strokeWidth={3} name="Entropie Shannon Moyenne" dot={{ fill: '#8b5cf6', r: 5 }} strokeDasharray="5 5" />
+              <Line yAxisId="right" type="monotone" dataKey="cv" stroke="#8b5cf6" strokeWidth={3} name="CV Moyenne (%)" dot={{ fill: '#8b5cf6', r: 5 }} strokeDasharray="5 5" />
             </LineChart>
           </ResponsiveContainer>
             <button
@@ -601,7 +601,7 @@ export function StationBehavior() {
             <thead>
               <tr className="border-b-2 border-gray-200 bg-gray-50">
                 <th className="text-left py-4 px-4 text-sm font-bold text-gray-700">Station</th>
-                <th className="text-left py-4 px-4 text-sm font-bold text-gray-700">Entropie Shannon</th>
+                <th className="text-left py-4 px-4 text-sm font-bold text-gray-700">Coeficient de Variation (CV)</th>
                 <th className="text-left py-4 px-4 text-sm font-bold text-gray-700">Flux de Transit</th>
                 <th className="text-left py-4 px-4 text-sm font-bold text-gray-700">Profil</th>
                 <th className="text-left py-4 px-4 text-sm font-bold text-gray-700">Tendance</th>
@@ -614,8 +614,8 @@ export function StationBehavior() {
                   <td className="py-4 px-4 text-gray-900 font-semibold">{station.name}</td>
                   <td className="py-4 px-4">
                     <span className="inline-flex items-center px-3 py-1 rounded-full bg-purple-100 text-purple-700 font-bold text-sm">
-                      {station.entropy}
-                      <span className="ml-1 text-xs">(bits)</span>
+                      {station.cv}
+                      <span className="ml-1 text-xs">%</span>
                     </span>
                   </td>
                   <td className="py-4 px-4">

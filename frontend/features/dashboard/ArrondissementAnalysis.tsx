@@ -13,7 +13,7 @@ interface CommuneData {
   docks: number;
   capacity: number;
   utilization: number;
-  entropy: number;
+  cv: number;  // Coefficient of Variation (%)
   population: number;
 }
 
@@ -50,8 +50,8 @@ export function ArrondissementAnalysis() {
     
     return [
       { metric: 'Stations', ...Object.fromEntries(top4.map(c => [c.code, c.stations])) },
-      { metric: 'Bikes Available', ...Object.fromEntries(top4.map(c => [c.code, c.bikes])) },
-      { metric: 'Entropy (bits)', ...Object.fromEntries(top4.map(c => [c.code, parseFloat((c.entropy || 0).toFixed(2))])) },
+      { metric: 'Vélos Disponibles', ...Object.fromEntries(top4.map(c => [c.code, c.bikes])) },
+      { metric: 'CV (%)', ...Object.fromEntries(top4.map(c => [c.code, parseFloat((c.cv || 0).toFixed(2))])) },
     ];
   }, [communes]);
 
@@ -89,7 +89,7 @@ export function ArrondissementAnalysis() {
         <p className="text-gray-600">Compare station performance across communes in the Île-de-France region</p>
       </div>
 
-      {/* Top Communes by Entropy */}
+      {/* Top Communes by Coefficient of Variation */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 mb-8">
         {topCommunes.map(commune => (
           <Card 
@@ -105,13 +105,13 @@ export function ArrondissementAnalysis() {
               </div>
               <Badge className="bg-purple-100 text-purple-800 whitespace-nowrap flex items-center gap-1">
                 <Zap className="w-3 h-3" />
-                {(commune.entropy || 0).toFixed(2)}
+                {(commune.cv || 0).toFixed(2)}%
               </Badge>
             </div>
             <div className="space-y-3 text-sm">
               <div className="flex items-center gap-2 text-gray-600">
                 <Bike className="w-4 h-4 text-blue-600" />
-                <span className="font-semibold text-gray-900">{commune.bikes} bikes</span>
+                <span className="font-semibold text-gray-900">{commune.bikes} vélos</span>
               </div>
               <div className="flex items-center gap-2 text-gray-600">
                 <Building2 className="w-4 h-4" />
@@ -124,9 +124,9 @@ export function ArrondissementAnalysis() {
 
       {/* Main Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-        {/* Entropy by Commune */}
+        {/* Coefficient of Variation by Commune */}
         <Card className="p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-6">Entropy (Unpredictability) by Commune</h3>
+          <h3 className="text-lg font-semibold text-gray-900 mb-6">Coefficient de Variation (%) par Commune</h3>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart 
               data={communes}
@@ -148,15 +148,15 @@ export function ArrondissementAnalysis() {
                     return (
                       <div className="bg-white p-3 border border-gray-200 rounded shadow-lg">
                         <p className="font-semibold text-gray-900">{data.name}</p>
-                        <p className="text-sm text-gray-600">Entropy: {data.entropy.toFixed(2)} bits</p>
-                        <p className="text-sm text-gray-600">Bikes: {data.bikes}</p>
+                        <p className="text-sm text-gray-600">CV: {data.cv.toFixed(2)}%</p>
+                        <p className="text-sm text-gray-600">Vélos: {data.bikes}</p>
                       </div>
                     );
                   }
                   return null;
                 }}
               />
-              <Bar dataKey="entropy" fill="#8b5cf6" name="Entropy (bits)" />
+              <Bar dataKey="cv" fill="#8b5cf6" name="Coefficient de Variation (%)" />
             </BarChart>
           </ResponsiveContainer>
         </Card>
@@ -225,13 +225,13 @@ export function ArrondissementAnalysis() {
         <Card className="p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600 mb-2">Avg Entropy</p>
+              <p className="text-sm text-gray-600 mb-2">Avg Coefficient de Variation</p>
               <p className="text-3xl font-bold text-gray-900">
                 {communes.length > 0 
-                  ? (communes.reduce((sum, c) => sum + (c.entropy || 0), 0) / communes.length).toFixed(2)
+                  ? (communes.reduce((sum, c) => sum + (c.cv || 0), 0) / communes.length).toFixed(2)
                   : '0'}
               </p>
-              <p className="text-xs text-gray-500 mt-1">bits (unpredictability)</p>
+              <p className="text-xs text-gray-500 mt-1">% (Activity Variability)</p>
             </div>
             <Zap className="w-8 h-8 text-purple-500" />
           </div>
@@ -281,7 +281,7 @@ export function ArrondissementAnalysis() {
                 <th className="text-center py-3 px-4 text-gray-700 font-semibold">Stations</th>
                 <th className="text-right py-3 px-4 text-gray-700 font-semibold">Bikes Available</th>
                 <th className="text-right py-3 px-4 text-gray-700 font-semibold">Docks</th>
-                <th className="text-right py-3 px-4 text-gray-700 font-semibold">Entropy (bits)</th>
+                <th className="text-right py-3 px-4 text-gray-700 font-semibold">CV (%)</th>
                 <th className="text-right py-3 px-4 text-gray-700 font-semibold">Utilization</th>
                 <th className="text-right py-3 px-4 text-gray-700 font-semibold">Population</th>
               </tr>
@@ -303,7 +303,7 @@ export function ArrondissementAnalysis() {
                   <td className="py-3 px-4 text-right text-gray-900">{commune.docks.toLocaleString()}</td>
                   <td className="py-3 px-4 text-right">
                     <Badge className="bg-purple-100 text-purple-700 font-semibold">
-                      {(commune.entropy || 0).toFixed(2)}
+                      {(commune.cv || 0).toFixed(2)}%
                     </Badge>
                   </td>
                   <td className="py-3 px-4 text-right">

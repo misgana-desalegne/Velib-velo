@@ -6,12 +6,19 @@ from .arrondissement_service import CommuneService
 from .station_service import StationService
 from .analytics_service import AnalyticsService
 from .advanced_analytics_service import AdvancedAnalyticsService
-from .velib_data_ingestion import VelibDataIngestionService
+from .extractor import DataExtractor
+from .transformer import DataCleaner, DataTransformer
+from .loader import CommuneLoader, BikeStationLoader, StationStatusLoader
 
 __all__ = [
     'CommuneService', 
     'StationService', 
     'AnalyticsService',
     'AdvancedAnalyticsService',
-    'VelibDataIngestionService',
+    'DataExtractor',
+    'DataCleaner',
+    'DataTransformer',
+    'CommuneLoader',
+    'BikeStationLoader',
+    'StationStatusLoader',
 ]

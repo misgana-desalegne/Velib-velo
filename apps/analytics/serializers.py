@@ -39,7 +39,7 @@ class DailyAnalyticsSerializer(serializers.ModelSerializer):
     class Meta:
         model = DailyAnalytics
         fields = ['id', 'date', 'commune', 'commune_code', 'station', 
-                  'station_name', 'total_trips', 'average_utilization', 'peak_hour',
+                  'station_name', 'average_utilization', 'peak_hour',
                   'shannon_entropy', 'net_flux', 'is_source', 'is_sink', 'is_ghost']
 
 
@@ -52,6 +52,7 @@ class CommuneAnalyticsSerializer(serializers.Serializer):
     docks = serializers.IntegerField()
     capacity = serializers.IntegerField()
     utilization = serializers.FloatField()
+    cv = serializers.FloatField()
     population = serializers.IntegerField()
 
 

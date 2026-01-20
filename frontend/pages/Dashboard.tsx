@@ -255,4 +255,4 @@ export function Dashboard() {
         </Card>
       </div>
     </div>
-  );
+  )};

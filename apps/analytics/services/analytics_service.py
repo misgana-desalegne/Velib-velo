@@ -4,7 +4,7 @@ This service handles dashboard statistics and analytics computations.
 """
 from django.utils import timezone
 from datetime import timedelta
-from django.db.models import Sum, Avg, Count
+from django.db.models import Sum, Avg, Count, QuerySet
 from ..models import BikeStation, StationStatus
 
 
@@ -76,18 +76,16 @@ class AnalyticsService:
         """
         Get trips within a date range.
         
+        DEPRECATED: Trip model no longer exists.
+        Returns empty QuerySet for backward compatibility.
+        
         Args:
             start_date: Starting date (optional)
             end_date: Ending date (optional)
             
         Returns:
-            QuerySet: Filtered Trip objects
+            QuerySet: Empty (Trip model deprecated)
         """
-        queryset = Trip.objects.select_related('start_station', 'end_station').all()
-        
-        if start_date:
-            queryset = queryset.filter(start_time__gte=start_date)
-        if end_date:
-            queryset = queryset.filter(start_time__lte=end_date)
-        
-        return queryset
+        # Trip model has been deprecated and removed
+        # This method returns empty for backward compatibility
+        return QuerySet()

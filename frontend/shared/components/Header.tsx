@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Activity, TrendingUp, Building2, Map, Bike, LogOut, Menu, X, Users } from 'lucide-react';
 import { Button } from '../ui/button';
 import logo from '@/assets/images/img/logo/LOGO velo.png';
+import '../styles/responsive.css';
 import type { AppPage } from '../types/navigation';
 
 // Dashboard Header Props
@@ -48,19 +49,22 @@ export function Header(props: HeaderProps) {
 
     return (
       <header className="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
-        <div className="flex items-center justify-between px-4 py-2">
+        <div className="flex items-center justify-between px-2 sm:px-4 py-2 h-16">
           {/* Logo and Title */}
           <button
-            onClick={() => onViewChange('live')}
-            className="flex items-center gap-2 hover:opacity-80 transition-opacity cursor-pointer"
+            onClick={() => {
+              onViewChange('live');
+              setIsMenuOpen(false);
+            }}
+            className="flex items-center gap-2 hover:opacity-80 transition-opacity cursor-pointer flex-shrink-0"
             style={{ background: 'none', border: 'none', padding: 0 }}
             title="Go to Dashboard"
           >
             <img src={logo} alt="ParisCycle - Innovative Urban Mobility Logo" style={{ height: '40px', width: 'auto' }} />
           </button>
 
-          {/* Navigation Menu */}
-          <nav className="flex items-center gap-2">
+          {/* Desktop Navigation - Hidden on mobile */}
+          <nav className="hidden md:flex items-center gap-2 flex-1 mx-4">
             {menuItems.map((item) => {
               const Icon = item.icon;
               return (
@@ -73,17 +77,17 @@ export function Header(props: HeaderProps) {
                   onClick={() => onViewChange(item.id)}
                 >
                   <Icon className="w-4 h-4" />
-                  <span className="hidden sm:inline">{item.label}</span>
+                  <span>{item.label}</span>
                 </Button>
               );
             })}
           </nav>
 
-          {/* Status Indicator and Logout */}
-          <div className="flex items-center gap-3">
+          {/* Status Indicator and Logout - Desktop */}
+          <div className="hidden md:flex items-center gap-3">
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-              <span className="text-sm text-gray-600 hidden md:inline">En Direct</span>
+              <span className="text-sm text-gray-600">En Direct</span>
             </div>
             
             {onLogout && (
@@ -95,11 +99,67 @@ export function Header(props: HeaderProps) {
                 onClick={onLogout}
               >
                 <LogOut className="w-4 h-4" />
-                <span className="hidden sm:inline">Déconnexion</span>
+                <span>Déconnexion</span>
               </Button>
             )}
           </div>
+
+          {/* Mobile Hamburger Menu Button */}
+          <button
+            onClick={toggleMenu}
+            className="md:hidden p-2 hover:bg-gray-100 rounded-lg transition-colors ml-auto"
+          >
+            {isMenuOpen ? (
+              <X className="w-6 h-6 text-gray-700" />
+            ) : (
+              <Menu className="w-6 h-6 text-gray-700" />
+            )}
+          </button>
         </div>
+
+        {/* Mobile Menu - Collapsible */}
+        {isMenuOpen && (
+          <div className="md:hidden border-t border-gray-200 bg-gray-50">
+            <nav className="flex flex-col divide-y">
+              {menuItems.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <button
+                    key={item.id}
+                    className={`flex items-center gap-3 px-4 py-3 transition-colors ${
+                      activeView === item.id 
+                        ? 'bg-blue-50 text-blue-600' 
+                        : 'hover:bg-gray-100 text-gray-700'
+                    }`}
+                    onClick={() => {
+                      onViewChange(item.id);
+                      setIsMenuOpen(false);
+                    }}
+                  >
+                    <Icon className="w-5 h-5" />
+                    <span className="font-medium">{item.label}</span>
+                  </button>
+                );
+              })}
+              <div className="px-4 py-3 flex items-center gap-2 bg-white">
+                <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                <span className="text-sm text-gray-600">En Direct</span>
+              </div>
+              {onLogout && (
+                <button
+                  onClick={() => {
+                    onLogout();
+                    setIsMenuOpen(false);
+                  }}
+                  className="flex items-center gap-3 px-4 py-3 text-red-600 hover:bg-red-50 transition-colors w-full text-left"
+                >
+                  <LogOut className="w-5 h-5" />
+                  <span className="font-medium">Déconnexion</span>
+                </button>
+              )}
+            </nav>
+          </div>
+        )}
       </header>
     );
   }
@@ -126,7 +186,7 @@ export function Header(props: HeaderProps) {
       zIndex: 1000,
       borderBottom: '1px solid #e5e7eb'
     }}>
-      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 20px' }}>
+      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 16px' }}>
         <div style={{
           display: 'flex',
           alignItems: 'center',
@@ -135,7 +195,10 @@ export function Header(props: HeaderProps) {
         }}>
           {/* Logo */}
           <button 
-            onClick={() => onNavigate('landing')} 
+            onClick={() => {
+              onNavigate('landing');
+              closeMenu();
+            }}
             style={{
               background: 'none',
               border: 'none',
@@ -143,19 +206,20 @@ export function Header(props: HeaderProps) {
               display: 'flex',
               alignItems: 'center',
               gap: '10px',
-              padding: 0
+              padding: 0,
+              flexShrink: 0
             }}
           >
             <img src={logo} alt="ParisCycle - Innovative Urban Mobility Logo" style={{ height: '50px', width: 'auto' }} />
           </button>
           
-          {/* Desktop Navigation */}
+          {/* Desktop Navigation - Hidden on mobile */}
           <nav style={{
             display: 'flex',
             gap: '15px',
             alignItems: 'center',
             padding: '10px 20px'
-          }} className="hidden-mobile">
+          }} className="hidden md:flex">
             <button 
               onClick={() => onNavigate('landing')}
               style={{
@@ -310,23 +374,25 @@ export function Header(props: HeaderProps) {
               border: 'none',
               cursor: 'pointer',
               padding: '8px',
-              color: '#333'
+              color: '#333',
+              marginLeft: 'auto'
             }}
-            className="show-mobile"
+            className="md:hidden"
           >
             {isMenuOpen ? <X size={28} /> : <Menu size={28} />}
           </button>
         </div>
 
-        {/* Mobile Navigation */}
+        {/* Mobile Navigation - Collapsible */}
         {isMenuOpen && (
           <nav style={{
             display: 'flex',
             flexDirection: 'column',
-            gap: '15px',
-            padding: '20px 0',
-            borderTop: '1px solid #e5e7eb'
-          }} className="show-mobile">
+            gap: '0',
+            padding: '0',
+            borderTop: '1px solid #e5e7eb',
+            backgroundColor: '#f9fafb'
+          }} className="md:hidden">
             <button 
               onClick={() => { onNavigate('landing'); closeMenu(); }}
               style={{
@@ -336,9 +402,13 @@ export function Header(props: HeaderProps) {
                 fontSize: '1rem',
                 fontWeight: '500',
                 cursor: 'pointer',
-                padding: '12px 0',
-                textAlign: 'left'
+                padding: '12px 16px',
+                textAlign: 'left',
+                borderBottom: '1px solid #e5e7eb',
+                transition: 'background-color 0.2s'
               }}
+              onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#f3f4f6'}
+              onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
             >
               Accueil
             </button>
@@ -352,9 +422,13 @@ export function Header(props: HeaderProps) {
                 fontSize: '1rem',
                 fontWeight: '500',
                 cursor: 'pointer',
-                padding: '12px 0',
-                textAlign: 'left'
+                padding: '12px 16px',
+                textAlign: 'left',
+                borderBottom: '1px solid #e5e7eb',
+                transition: 'background-color 0.2s'
               }}
+              onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#f3f4f6'}
+              onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
             >
               Équipe
             </button>
@@ -369,83 +443,100 @@ export function Header(props: HeaderProps) {
                   fontSize: '1rem',
                   fontWeight: '500',
                   cursor: 'pointer',
-                  padding: '12px 0',
-                  textAlign: 'left'
+                  padding: '12px 16px',
+                  textAlign: 'left',
+                  borderBottom: '1px solid #e5e7eb',
+                  transition: 'background-color 0.2s'
                 }}
+                onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#f3f4f6'}
+                onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
               >
                 Tableau de bord
               </button>
             )}
             
-            {!isAuthenticated ? (
-              <>
+            <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {!isAuthenticated ? (
+                <>
+                  <button 
+                    onClick={() => { onNavigate('login'); closeMenu(); }}
+                    style={{
+                      backgroundColor: 'transparent',
+                      border: '2px solid #0055a4',
+                      color: '#0055a4',
+                      fontSize: '1rem',
+                      fontWeight: '600',
+                      cursor: 'pointer',
+                      padding: '10px 16px',
+                      borderRadius: '50px',
+                      width: '100%',
+                      transition: 'all 0.2s'
+                    }}
+                    onMouseOver={(e) => {
+                      e.currentTarget.style.backgroundColor = '#e6f0f7';
+                    }}
+                    onMouseOut={(e) => {
+                      e.currentTarget.style.backgroundColor = 'transparent';
+                    }}
+                  >
+                    Connexion
+                  </button>
+                  <button 
+                    onClick={() => { onNavigate('register'); closeMenu(); }}
+                    style={{
+                      color: '#fff',
+                      backgroundColor: '#159205',
+                      border: '2px solid #ef9b35',
+                      fontWeight: '600',
+                      fontSize: '1rem',
+                      cursor: 'pointer',
+                      padding: '10px 16px',
+                      borderRadius: '50px',
+                      width: '100%',
+                      transition: 'all 0.2s'
+                    }}
+                    onMouseOver={(e) => {
+                      e.currentTarget.style.backgroundColor = 'rgb(26, 216, 16)';
+                    }}
+                    onMouseOut={(e) => {
+                      e.currentTarget.style.backgroundColor = '#159205';
+                    }}
+                  >
+                    S'inscrire
+                  </button>
+                </>
+              ) : (
                 <button 
-                  onClick={() => { onNavigate('login'); closeMenu(); }}
+                  onClick={handleLogout}
                   style={{
-                    backgroundColor: 'transparent',
-                    border: '2px solid #0055a4',
-                    color: '#0055a4',
+                    background: 'none',
+                    border: '2px solid #dc3545',
+                    color: '#dc3545',
                     fontSize: '1rem',
                     fontWeight: '600',
                     cursor: 'pointer',
-                    padding: '12px',
+                    padding: '10px 16px',
                     borderRadius: '50px',
-                    width: '100%'
+                    width: '100%',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseOver={(e) => {
+                    e.currentTarget.style.backgroundColor = '#dc3545';
+                    e.currentTarget.style.color = 'white';
+                  }}
+                  onMouseOut={(e) => {
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                    e.currentTarget.style.color = '#dc3545';
                   }}
                 >
-                  Connexion
+                  <LogOut style={{ width: '16px', height: '16px', display: 'inline', marginRight: '5px' }} />
+                  Déconnexion
                 </button>
-                <button 
-                  onClick={() => { onNavigate('register'); closeMenu(); }}
-                  style={{
-                    backgroundColor: '#ef4135',
-                    border: 'none',
-                    color: 'white',
-                    fontSize: '1rem',
-                    fontWeight: '600',
-                    cursor: 'pointer',
-                    padding: '12px',
-                    borderRadius: '50px',
-                    width: '100%'
-                  }}
-                >
-                  S'inscrire
-                </button>
-              </>
-            ) : (
-              <button 
-                onClick={handleLogout}
-                style={{
-                  backgroundColor: 'transparent',
-                  border: '2px solid #dc3545',
-                  color: '#dc3545',
-                  fontSize: '1rem',
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                  padding: '12px',
-                  borderRadius: '8px',
-                  width: '100%'
-                }}
-              >
-                Déconnexion
-              </button>
-            )}
+              )}
+            </div>
           </nav>
         )}
       </div>
-
-      <style>{`
-        @media (max-width: 768px) {
-          .hidden-mobile {
-            display: none !important;
-          }
-        }
-        @media (min-width: 769px) {
-          .show-mobile {
-            display: none !important;
-          }
-        }
-      `}</style>
     </header>
   );
 }

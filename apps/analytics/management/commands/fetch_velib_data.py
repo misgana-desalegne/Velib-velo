@@ -10,7 +10,7 @@ Usage:
 """
 
 from django.core.management.base import BaseCommand
-from apps.analytics.services.velib_data_ingestion import VelibDataIngestionService
+from apps.analytics.services import DataExtractor, DataCleaner, DataTransformer, CommuneLoader, BikeStationLoader, StationStatusLoader
 import logging
 
 logger = logging.getLogger(__name__)
@@ -34,16 +34,42 @@ class Command(BaseCommand):
         limit = options.get('limit')
         
         try:
-            # Use unified service for fetch and sync
-            summary = VelibDataIngestionService.fetch_and_sync(limit)
+            # Extract: Get raw data from API
+            self.stdout.write("\n  1. Extracting data from API...")
+            extractor = DataExtractor()
+            records = extractor.extract(limit)
+            
+            if not records:
+                self.stdout.write(self.style.ERROR('  ✗ No records fetched from API'))
+                return
+            
+            self.stdout.write(f"  ✓ Extracted {len(records)} station records")
+            
+            # Transform: Parse and clean data
+            self.stdout.write("\n  2. Transforming data...")
+            cleaner = DataCleaner()
+            df_clean = cleaner.clean_station_records(records)
+            
+            transformer = DataTransformer()
+            df_transformed = transformer.transform(df_clean)
+            self.stdout.write(f"  ✓ Transformed {len(df_transformed)} records")
+            
+            # Load: Store in database
+            self.stdout.write("\n  3. Loading data into database...")
+            commune_loader = CommuneLoader()
+            station_loader = BikeStationLoader()
+            status_loader = StationStatusLoader()
+            
+            commune_loader.load_communes(df_transformed)
+            self.stdout.write("  ✓ Communes synced")
+            
+            station_ids = station_loader.load_stations(df_transformed)
+            self.stdout.write(f"  ✓ Stations synced ({len(station_ids)} records)")
+            
+            status_count = status_loader.load_status(df_transformed, station_ids)
+            self.stdout.write(f"  ✓ Status snapshots created ({status_count} records)")
             
             self.stdout.write(self.style.SUCCESS('\n✓ Data ingestion completed!'))
-            self.stdout.write(f"  Stations created: {summary.get('stations_created', 0)}")
-            self.stdout.write(f"  Stations updated: {summary.get('stations_updated', 0)}")
-            self.stdout.write(f"  Status records: {summary.get('statuses_created', 0)}")
-            
-            if summary.get('errors'):
-                self.stdout.write(self.style.WARNING(f"  Errors: {summary.get('errors', 0)}"))
             
         except Exception as e:
             self.stdout.write(self.style.ERROR(f'\n✗ Error during ingestion: {str(e)}'))

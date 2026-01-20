@@ -40,8 +40,8 @@ class StationService:
             QuerySet: BikeStation objects in the arrondissement
         """
         return BikeStation.objects.filter(
-            arrondissement__code=arrondissement_code
-        ).select_related('arrondissement')
+            commune__code=arrondissement_code
+        ).select_related('commune')
     
     @staticmethod
     def get_latest_station_status(station):
