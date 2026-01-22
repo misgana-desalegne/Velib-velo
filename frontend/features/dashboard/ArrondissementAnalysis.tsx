@@ -1,9 +1,10 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Card } from '../../shared/ui/card';
 import { Badge } from '../../shared/ui/badge';
-import { Building2, Bike, TrendingUp, MapPin, AlertCircle, Zap } from 'lucide-react';
+import { Building2, Bike, TrendingUp, MapPin, AlertCircle, Zap, Brain, X, Sparkles, Loader } from 'lucide-react';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { api, API_ENDPOINTS } from '../../api/config';
+import { generateCommuneAnalysisPrompt, getExplanationWithCache } from '../../api/gemini';
 
 interface CommuneData {
   code: string;
@@ -22,6 +23,41 @@ export function ArrondissementAnalysis() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedCommune, setSelectedCommune] = useState('all');
+  const [openExplanation, setOpenExplanation] = useState<string | null>(null);
+  const [explanationText, setExplanationText] = useState('');
+  const [explanationLoading, setExplanationLoading] = useState(false);
+
+  /**
+   * Fetch AI explanation from Gemini API
+   */
+  const fetchAIExplanation = async (chartType: 'cv' | 'bikes' | 'comparison') => {
+    try {
+      setExplanationLoading(true);
+      const prompt = generateCommuneAnalysisPrompt(chartType, communes);
+      const cacheKey = `commune_${chartType}_${new Date().toDateString()}`;
+      
+      console.log(`🤖 Fetching AI explanation for: ${chartType}`);
+      const text = await getExplanationWithCache(cacheKey, prompt);
+      
+      setExplanationText(text);
+      setOpenExplanation(chartType);
+    } catch (err) {
+      console.error('❌ Error fetching AI explanation:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      setExplanationText(`⚠️ Failed to generate AI explanation.\n\nError: ${errorMessage}\n\nPlease check the browser console (F12) for more details. The API key or network may be experiencing issues.`);
+      setOpenExplanation(chartType);
+    } finally {
+      setExplanationLoading(false);
+    }
+  };
+
+  const handleExplanationClick = async (chartType: 'cv' | 'bikes' | 'comparison') => {
+    if (openExplanation === chartType) {
+      setOpenExplanation(null);
+    } else {
+      await fetchAIExplanation(chartType);
+    }
+  };
 
   useEffect(() => {
     const fetchCommuneData = async () => {
@@ -83,6 +119,11 @@ export function ArrondissementAnalysis() {
 
   return (
     <div className="p-8 bg-white/95 min-h-screen">
+      {/* AI Explanation Floating Popup - appears over the specific chart */}
+      {openExplanation && (
+        <div className="fixed inset-0 z-40" onClick={() => setOpenExplanation(null)} />
+      )}
+
       {/* Header */}
       <div className="mb-8">
         <h2 className="text-3xl font-bold text-gray-900 mb-2">Analysis by Commune</h2>
@@ -125,8 +166,62 @@ export function ArrondissementAnalysis() {
       {/* Main Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
         {/* Coefficient of Variation by Commune */}
-        <Card className="p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-6">Coefficient de Variation (%) par Commune</h3>
+        <Card className="p-6 relative overflow-hidden">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-lg font-semibold text-gray-900">Coefficient de Variation (%) par Commune</h3>
+            <button
+              onClick={() => handleExplanationClick('cv')}
+              disabled={explanationLoading}
+              className="px-4 py-2 bg-white border-2 border-gray-300 hover:border-green-600 hover:bg-green-50 disabled:opacity-50 text-black font-bold text-sm rounded-lg flex items-center gap-2 transition-all duration-200 hover:shadow-md cursor-pointer"
+            >
+              <Brain className="w-4 h-4" />
+              IA
+            </button>
+          </div>
+
+          {/* Floating Explanation Popup for CV Chart */}
+          {openExplanation === 'cv' && (
+            <div className="absolute top-20 right-6 z-50 w-96 h-96 bg-white border-2 border-purple-300 rounded-xl shadow-2xl p-6 overflow-y-auto flex flex-col">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-purple-600" />
+                  <p className="text-sm font-bold text-purple-600 uppercase">Analyse IA</p>
+                </div>
+                <button
+                  onClick={() => setOpenExplanation(null)}
+                  className="p-1 hover:bg-gray-100 rounded transition-colors"
+                >
+                  <X className="w-4 h-4 text-gray-600" />
+                </button>
+              </div>
+              {explanationLoading ? (
+                <div className="flex-grow flex items-center justify-center">
+                  <div className="text-center">
+                    <div className="relative w-16 h-16 mx-auto mb-4">
+                      <div className="absolute inset-0 rounded-full bg-gradient-to-r from-purple-300 to-blue-300 animate-pulse"></div>
+                      <div className="absolute inset-2 rounded-full bg-white"></div>
+                      <Loader className="absolute inset-0 m-auto w-8 h-8 text-purple-600 animate-spin" />
+                    </div>
+                    <p className="text-sm font-semibold text-gray-900">Generating analysis...</p>
+                    <p className="text-xs text-gray-500 mt-1">🤖 AI is thinking...</p>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <p className="text-sm text-gray-700 leading-relaxed mb-4 flex-grow">{explanationText}</p>
+                  <button
+                    onClick={() => fetchAIExplanation('cv')}
+                    disabled={explanationLoading}
+                    className="mt-auto w-full px-3 py-2 bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 disabled:opacity-50 text-white text-xs font-semibold rounded transition-all"
+                  >
+                    <Sparkles className="w-3 h-3 inline mr-1" />
+                    Générer une autre explication
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+
           <ResponsiveContainer width="100%" height={300}>
             <BarChart 
               data={communes}
@@ -162,8 +257,62 @@ export function ArrondissementAnalysis() {
         </Card>
 
         {/* Bikes Available by Commune */}
-        <Card className="p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-6">Available Bikes by Commune</h3>
+        <Card className="p-6 relative overflow-hidden">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-lg font-semibold text-gray-900">Available Bikes by Commune</h3>
+            <button
+              onClick={() => handleExplanationClick('bikes')}
+              disabled={explanationLoading}
+              className="px-4 py-2 bg-white border-2 border-gray-300 hover:border-green-600 hover:bg-green-50 disabled:opacity-50 text-black font-bold text-sm rounded-lg flex items-center gap-2 transition-all duration-200 hover:shadow-md cursor-pointer"
+            >
+              <Brain className="w-4 h-4" />
+              IA
+            </button>
+          </div>
+
+          {/* Floating Explanation Popup for Bikes Chart */}
+          {openExplanation === 'bikes' && (
+            <div className="absolute top-20 right-6 z-50 w-96 h-96 bg-white border-2 border-purple-300 rounded-xl shadow-2xl p-6 overflow-y-auto flex flex-col">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-purple-600" />
+                  <p className="text-sm font-bold text-purple-600 uppercase">Analyse IA</p>
+                </div>
+                <button
+                  onClick={() => setOpenExplanation(null)}
+                  className="p-1 hover:bg-gray-100 rounded transition-colors"
+                >
+                  <X className="w-4 h-4 text-gray-600" />
+                </button>
+              </div>
+              {explanationLoading ? (
+                <div className="flex-grow flex items-center justify-center">
+                  <div className="text-center">
+                    <div className="relative w-16 h-16 mx-auto mb-4">
+                      <div className="absolute inset-0 rounded-full bg-gradient-to-r from-purple-300 to-blue-300 animate-pulse"></div>
+                      <div className="absolute inset-2 rounded-full bg-white"></div>
+                      <Loader className="absolute inset-0 m-auto w-8 h-8 text-purple-600 animate-spin" />
+                    </div>
+                    <p className="text-sm font-semibold text-gray-900">Generating analysis...</p>
+                    <p className="text-xs text-gray-500 mt-1">🤖 AI is thinking...</p>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <p className="text-sm text-gray-700 leading-relaxed mb-4 flex-grow">{explanationText}</p>
+                  <button
+                    onClick={() => fetchAIExplanation('bikes')}
+                    disabled={explanationLoading}
+                    className="mt-auto w-full px-3 py-2 bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 disabled:opacity-50 text-white text-xs font-semibold rounded transition-all"
+                  >
+                    <Sparkles className="w-3 h-3 inline mr-1" />
+                    Générer une autre explication
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+
           <ResponsiveContainer width="100%" height={300}>
             <LineChart 
               data={communes}
@@ -202,8 +351,57 @@ export function ArrondissementAnalysis() {
 
         {/* Comparison Chart - Top Communes */}
         {comparisonData.length > 0 && (
-          <Card className="p-6 lg:col-span-2">
-            <h3 className="text-lg font-semibold text-gray-900 mb-6">Metrics Comparison - Top 4 Communes</h3>
+          <Card className="p-6 lg:col-span-2 relative overflow-hidden">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-semibold text-gray-900">Metrics Comparison - Top 4 Communes</h3>
+              <button
+                onClick={() => handleExplanationClick('comparison')}
+                disabled={explanationLoading}
+                className="px-4 py-2 bg-white border-2 border-gray-300 hover:border-green-600 hover:bg-green-50 disabled:opacity-50 text-black font-bold text-sm rounded-lg flex items-center gap-2 transition-all duration-200 hover:shadow-md cursor-pointer"
+              >
+                <Brain className="w-4 h-4" />
+                IA
+              </button>
+            </div>
+
+            {/* Floating Explanation Popup for Comparison Chart */}
+            {openExplanation === 'comparison' && (
+              <div className="absolute top-20 right-6 z-50 w-96 h-96 bg-white border-2 border-purple-300 rounded-xl shadow-2xl p-6 overflow-y-auto flex flex-col">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-5 h-5 text-purple-600" />
+                    <p className="text-sm font-bold text-purple-600 uppercase">Analyse IA</p>
+                  </div>
+                  <button
+                    onClick={() => setOpenExplanation(null)}
+                    className="p-1 hover:bg-gray-100 rounded transition-colors"
+                  >
+                    <X className="w-4 h-4 text-gray-600" />
+                  </button>
+                </div>
+                {explanationLoading ? (
+                  <div className="flex-grow flex items-center justify-center">
+                    <div className="text-center">
+                      <Loader className="w-8 h-8 text-purple-600 animate-spin mx-auto mb-2" />
+                      <p className="text-sm text-gray-600">Generating AI explanation...</p>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-sm text-gray-700 leading-relaxed mb-4 flex-grow">{explanationText}</p>
+                    <button
+                      onClick={() => fetchAIExplanation('comparison')}
+                      disabled={explanationLoading}
+                      className="mt-auto w-full px-3 py-2 bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 disabled:opacity-50 text-white text-xs font-semibold rounded transition-all"
+                    >
+                      <Sparkles className="w-3 h-3 inline mr-1" />
+                      Générer une autre explication
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={comparisonData}>
                 <CartesianGrid strokeDasharray="3 3" />

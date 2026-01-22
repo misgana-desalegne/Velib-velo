@@ -16,6 +16,7 @@ export const API_ENDPOINTS = {
   
   // Stations
   stations: `${API_BASE_URL}/stations/`,
+  stationsAll: `${API_BASE_URL}/stations/all/`,
   stationDetail: (id: number) => `${API_BASE_URL}/stations/${id}/`,
   stationStatusHistory: (id: number, hours?: number) => 
     `${API_BASE_URL}/stations/${id}/status_history/?hours=${hours || 24}`,
@@ -28,6 +29,9 @@ export const API_ENDPOINTS = {
   
   // Analytics
   analytics: `${API_BASE_URL}/analytics/`,
+  hourlyAnalytics: `${API_BASE_URL}/hourly-analytics/`,
+  weeklyAnalytics: `${API_BASE_URL}/weekly-analytics/`,
+  advancedAnalytics: `${API_BASE_URL}/advanced-analytics/`,
 };
 
 // Generic API helper functions

@@ -64,7 +64,7 @@ class StationService:
         Returns:
             list: List of tuples (station, latest_status)
         """
-        stations = BikeStation.objects.filter(is_active=True)
+        stations = BikeStation.objects.filter(is_installed=True)
         result = []
         
         for station in stations:

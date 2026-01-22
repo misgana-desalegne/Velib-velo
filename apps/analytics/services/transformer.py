@@ -88,23 +88,47 @@ class DataCleaner:
         
         df.rename(columns=column_mapping, inplace=True)
         
-        # Extract latitude and longitude from coordinates if needed
-        if 'coordinates' in df.columns and 'latitude' not in df.columns:
-            # Handle list format [lat, lon]
-            coords = df['coordinates'].apply(lambda x: x if isinstance(x, (list, tuple)) and len(x) == 2 else None)
-            df['latitude'] = coords.apply(lambda x: x[0] if x else None)
-            df['longitude'] = coords.apply(lambda x: x[1] if x else None)
-        
-        # Parse coordonnees_geo if present (format: "lat, lon" as string)
-        if 'coordonnees_geo' in df.columns and 'latitude' not in df.columns:
-            try:
-                coords_split = df['coordonnees_geo'].str.split(', ', expand=True, n=1)
-                if len(coords_split.columns) >= 2:
-                    df['latitude'] = pd.to_numeric(coords_split[0], errors='coerce')
-                    df['longitude'] = pd.to_numeric(coords_split[1], errors='coerce')
-                    logger.info("Parsed latitude/longitude from coordonnees_geo")
-            except Exception as e:
-                logger.warning(f"Failed to parse coordonnees_geo: {e}")
+        # Extract latitude and longitude from coordinates/coordonnees_geo if needed
+        if 'latitude' not in df.columns or 'longitude' not in df.columns:
+            # Try to extract from coordinates column (renamed from coordonnees_geo)
+            if 'coordinates' in df.columns:
+                # Handle dict format {'lat': ..., 'lon': ...}
+                def extract_coords_dict(x):
+                    if isinstance(x, dict):
+                        return x.get('lat'), x.get('lon')
+                    return None, None
+                
+                # Handle list format [lat, lon]
+                def extract_coords_list(x):
+                    if isinstance(x, (list, tuple)) and len(x) == 2:
+                        return x[0], x[1]
+                    return None, None
+                
+                # Try dict format first
+                coords_dict = df['coordinates'].apply(extract_coords_dict)
+                has_dict_coords = coords_dict.apply(lambda x: x[0] is not None and x[1] is not None).any()
+                
+                if has_dict_coords:
+                    df['latitude'] = coords_dict.apply(lambda x: x[0])
+                    df['longitude'] = coords_dict.apply(lambda x: x[1])
+                    logger.info("Parsed latitude/longitude from dict-format coordinates")
+                else:
+                    # Try list format as fallback
+                    coords_list = df['coordinates'].apply(extract_coords_list)
+                    df['latitude'] = coords_list.apply(lambda x: x[0])
+                    df['longitude'] = coords_list.apply(lambda x: x[1])
+                    logger.info("Parsed latitude/longitude from list-format coordinates")
+            
+            # If still no coordinates, try parsing coordonnees_geo if present (format: "lat, lon" as string)
+            if ('latitude' not in df.columns or df['latitude'].isna().all()) and 'coordonnees_geo' in df.columns:
+                try:
+                    coords_split = df['coordonnees_geo'].str.split(', ', expand=True, n=1)
+                    if len(coords_split.columns) >= 2:
+                        df['latitude'] = pd.to_numeric(coords_split[0], errors='coerce')
+                        df['longitude'] = pd.to_numeric(coords_split[1], errors='coerce')
+                        logger.info("Parsed latitude/longitude from string-format coordonnees_geo")
+                except Exception as e:
+                    logger.warning(f"Failed to parse coordonnees_geo: {e}")
         
         # Convert OUI/NON strings to boolean
         boolean_columns = ['is_installed', 'is_renting', 'is_returning']
@@ -296,6 +320,47 @@ class DataTransformer:
         
         logger.info(f"Aggregated to {len(weekly_agg)} weekly records")
         return weekly_agg
+
+    @staticmethod
+    def aggregate_hourly(df: pd.DataFrame, station_col: str = 'stationcode',
+                         date_col: str = 'duedate') -> pd.DataFrame:
+        """
+        Aggregate data to hourly level
+
+        Args:
+            df: DataFrame with station data
+            station_col: Column name for station identifier
+            date_col: Column name for timestamp
+
+        Returns:
+            Hourly aggregated DataFrame
+        """
+        if date_col not in df.columns:
+            logger.error(f"Date column '{date_col}' not found")
+            return pd.DataFrame()
+
+        df_copy = df.copy()
+        df_copy[date_col] = pd.to_datetime(df_copy[date_col])
+        df_copy['hour_ts'] = df_copy[date_col].dt.floor('H')
+        df_copy['date'] = df_copy['hour_ts'].dt.date
+        df_copy['hour'] = df_copy['hour_ts'].dt.hour
+
+        hourly_agg = df_copy.groupby(['hour_ts', 'date', 'hour', station_col]).agg(
+            avg_numbikesavailable=('numbikesavailable', 'mean'),
+            avg_numdocksavailable=('numdocksavailable', 'mean'),
+            data_points=('numbikesavailable', 'size')
+        ).reset_index()
+
+        hourly_agg['avg_utilization'] = (
+            hourly_agg['avg_numbikesavailable'] /
+            (hourly_agg['avg_numbikesavailable'] + hourly_agg['avg_numdocksavailable']) * 100
+        ).fillna(0).round(2)
+
+        hourly_agg.sort_values(by=[station_col, 'hour_ts'], inplace=True)
+        hourly_agg['hourly_delta'] = hourly_agg.groupby(station_col)['avg_numbikesavailable'].diff().fillna(0)
+
+        logger.info(f"Aggregated to {len(hourly_agg)} hourly records")
+        return hourly_agg
     
     @staticmethod
     def calculate_hourly_delta(df: pd.DataFrame, station_col: str = 'stationcode',
@@ -420,6 +485,7 @@ class Transformer:
         result = {'raw': df_clean}
         
         if 'duedate' in df_clean.columns:
+            result['hourly'] = self.transformer.aggregate_hourly(df_clean)
             result['daily'] = self.transformer.aggregate_daily(df_clean)
             result['weekly'] = self.transformer.aggregate_weekly(df_clean)
         

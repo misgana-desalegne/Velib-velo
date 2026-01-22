@@ -15,9 +15,15 @@ from apps.analytics.services.advanced_analytics_service import AdvancedAnalytics
 
 
 class AnalyticsViewSet(viewsets.ReadOnlyModelViewSet):
-    """ViewSet for advanced analytics data"""
-    queryset = DailyAnalytics.objects.all()
+    """ViewSet for advanced analytics data - optimized with select_related"""
     serializer_class = DailyAnalyticsSerializer
+    
+    def get_queryset(self):
+        """Optimize queries with select_related to prevent N+1 queries"""
+        return DailyAnalytics.objects.select_related(
+            'station',
+            'commune'
+        ).all()
     
     @action(detail=False, methods=['get'])
     def sources(self, request):
@@ -57,34 +63,54 @@ class AnalyticsViewSet(viewsets.ReadOnlyModelViewSet):
     
     @action(detail=False, methods=['get'])
     def summary(self, request):
-        """Get analytics summary for entire network"""
+        """Get analytics summary for entire network - optimized queries"""
         days = int(request.query_params.get('days', 15))
         since = timezone.now().date() - timedelta(days=days)
         
+        # Optimized: Use aggregations instead of separate queries
         analytics = DailyAnalytics.objects.filter(
             station__isnull=False,
             date__gte=since
+        ).select_related('station', 'commune')
+        
+        # Aggregate all profile counts in one query
+        profile_counts = BikeStation.objects.aggregate(
+            sources=Count('id', filter=Q(profile='commuter_source')),
+            sinks=Count('id', filter=Q(profile='commuter_sink')),
+            balanced=Count('id', filter=Q(profile='balanced_hub')),
+            ghost=Count('id', filter=Q(profile='ghost_station')),
+            active=Count('id', filter=Q(is_installed=True))
+        )
+        
+        # Aggregate all metrics in one query
+        metrics = analytics.aggregate(
+            shannon_entropy_avg=Avg('shannon_entropy'),
+            net_flux_avg=Avg('net_flux'),
+            hourly_delta_avg=Avg('average_hourly_delta'),
+            capacity_issues=Count('id', filter=Q(persistence_at_full__gte=8)),
+            rebalance_needed=Count('id', filter=Q(persistence_at_empty__gte=8)),
+            ghost_candidates=Count('id', filter=Q(is_ghost=True))
         )
         
         summary = {
-            'total_stations_tracked': BikeStation.objects.filter(is_active=True).count(),
+            'total_stations_tracked': profile_counts['active'],
             'total_analytics_records': analytics.count(),
             'period_days': days,
             'station_profiles': {
-                'sources': BikeStation.objects.filter(profile='commuter_source').count(),
-                'sinks': BikeStation.objects.filter(profile='commuter_sink').count(),
-                'balanced': BikeStation.objects.filter(profile='balanced_hub').count(),
-                'ghost': BikeStation.objects.filter(profile='ghost_station').count(),
+                'sources': profile_counts['sources'],
+                'sinks': profile_counts['sinks'],
+                'balanced': profile_counts['balanced'],
+                'ghost': profile_counts['ghost'],
             },
             'metrics_average': {
-                'shannon_entropy': float(analytics.aggregate(Avg('shannon_entropy'))['shannon_entropy__avg'] or 0),
-                'net_flux': float(analytics.aggregate(Avg('net_flux'))['net_flux__avg'] or 0),
-                'average_hourly_delta': float(analytics.aggregate(Avg('average_hourly_delta'))['average_hourly_delta__avg'] or 0),
+                'shannon_entropy': float(metrics['shannon_entropy_avg'] or 0),
+                'net_flux': float(metrics['net_flux_avg'] or 0),
+                'average_hourly_delta': float(metrics['hourly_delta_avg'] or 0),
             },
             'network_health': {
-                'stations_with_capacity_issues': analytics.filter(persistence_at_full__gte=8).values('station').distinct().count(),
-                'stations_needing_rebalancing': analytics.filter(persistence_at_empty__gte=8).values('station').distinct().count(),
-                'ghost_station_candidates': analytics.filter(is_ghost=True).values('station').distinct().count(),
+                'stations_with_capacity_issues': metrics['capacity_issues'],
+                'stations_needing_rebalancing': metrics['rebalance_needed'],
+                'ghost_station_candidates': metrics['ghost_candidates'],
             }
         }
         
@@ -132,9 +158,9 @@ class StationProfileViewSet(viewsets.ReadOnlyModelViewSet):
         profile = request.query_params.get('profile')
         
         if profile:
-            stations = BikeStation.objects.filter(profile=profile, is_active=True)
+            stations = BikeStation.objects.filter(profile=profile, is_installed=True)
         else:
-            stations = BikeStation.objects.filter(is_active=True)
+            stations = BikeStation.objects.filter(is_installed=True)
         
         serializer = self.get_serializer(stations, many=True)
         return Response(serializer.data)

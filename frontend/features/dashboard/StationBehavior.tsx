@@ -3,10 +3,11 @@ import { Card } from '../../shared/ui/card';
 import { Button } from '../../shared/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../shared/ui/select';
 import { Input } from '../../shared/ui/input';
-import { Search, Calendar, TrendingUp, TrendingDown, AlertCircle, Sparkles, X, Brain } from 'lucide-react';
+import { Search, Calendar, TrendingUp, TrendingDown, AlertCircle, Sparkles, X, Brain, Loader } from 'lucide-react';
 import { LineChart, Line, AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { Badge } from '../../shared/ui/badge';
 import { api, API_ENDPOINTS } from '../../api/config';
+import { generateStationAnalysisPrompt, getExplanationWithCache } from '../../api/gemini';
 
 // Default/sample data for when API data isn't available
 // Updated to use Flux (Flux de Transit) and CV (Coefficient de Variation)
@@ -58,36 +59,64 @@ export function StationBehavior() {
   const [stationData, setStationData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [dailyBehaviorData, setDailyBehaviorData] = useState(getDefaultHourlyData());
-  const [weeklyPattern, setWeeklyPattern] = useState(getDefaultWeeklyData());
-  const [monthlyTrend, setMonthlyTrend] = useState(getDefaultMonthlyData());
+  const [dailyBehaviorData, setDailyBehaviorData] = useState<any[]>([]);
+  const [weeklyPattern, setWeeklyPattern] = useState<any[]>([]);
+  const [monthlyTrend, setMonthlyTrend] = useState<any[]>([]);
   const [popularStations, setPopularStations] = useState(getDefaultPopularStations());
   const [openExplanation, setOpenExplanation] = useState<string | null>(null);
   const [explanationText, setExplanationText] = useState('');
+  const [explanationLoading, setExplanationLoading] = useState(false);
 
-  // Fetch communes that have stations
+  /**
+   * Fetch AI explanation from Gemini API
+   */
+  const fetchAIExplanation = async (chartType: 'daily' | 'weekly' | 'monthly') => {
+    try {
+      setExplanationLoading(true);
+      const stationName = stationData?.name || 'Station';
+      
+      // Pass actual chart data to prompts
+      let chartData: any[] = [];
+      if (chartType === 'daily') {
+        chartData = dailyBehaviorData;
+      } else if (chartType === 'weekly') {
+        chartData = weeklyPattern;
+      } else if (chartType === 'monthly') {
+        chartData = monthlyTrend;
+      }
+      
+      const prompt = generateStationAnalysisPrompt(chartType, stationName, chartData);
+      const cacheKey = `station_${selectedStation}_${chartType}_${new Date().toDateString()}`;
+      
+      console.log(`🤖 Fetching AI explanation for: ${chartType}`);
+      console.log(`📊 Chart data points: ${chartData.length}`);
+      const text = await getExplanationWithCache(cacheKey, prompt);
+      
+      setExplanationText(text);
+      setOpenExplanation(chartType);
+    } catch (err) {
+      console.error('❌ Error fetching AI explanation:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      setExplanationText(`⚠️ Failed to generate AI explanation.\n\nError: ${errorMessage}\n\nPlease check the browser console (F12) for more details. The API key or network may be experiencing issues.`);
+      setOpenExplanation(chartType);
+    } finally {
+      setExplanationLoading(false);
+    }
+  };
+
+  const handleExplanationClick = async (chartType: 'daily' | 'weekly' | 'monthly') => {
+    if (openExplanation === chartType) {
+      setOpenExplanation(null);
+    } else {
+      await fetchAIExplanation(chartType);
+    }
+  };
   useEffect(() => {
     const fetchCommunes = async () => {
       try {
-        // Fetch all stations to determine which communes have stations
-        const response = await api.get(`${API_ENDPOINTS.stations}?limit=1000`);
-        if (response && response.results && Array.isArray(response.results)) {
-          // Get unique communes from stations that have commune_code
-          const communeCodesWithStations = new Set(
-            response.results
-              .filter((s: any) => s.commune_code)
-              .map((s: any) => s.commune_code)
-          );
-          
-          // Fetch all communes
-          const communeList = await api.get(API_ENDPOINTS.communeList);
-          if (Array.isArray(communeList)) {
-            // Filter to only show communes that have at least one station
-            const filteredCommunes = communeList.filter((c: any) => 
-              communeCodesWithStations.has(c.code)
-            );
-            setCommunes(filteredCommunes);
-          }
+        const communeList = await api.get(API_ENDPOINTS.communeList);
+        if (Array.isArray(communeList)) {
+          setCommunes(communeList);
         }
       } catch (err) {
         console.error('Error fetching communes:', err);
@@ -96,46 +125,40 @@ export function StationBehavior() {
     fetchCommunes();
   }, []);
 
-  // Fetch stations on component mount
+  // Fetch stations on component mount & commune change
   useEffect(() => {
     const fetchStations = async () => {
       try {
         setError('');
-        // Fetch real stations from API with optional commune filter
-        const url = selectedCommune && selectedCommune !== 'all' 
-          ? `${API_ENDPOINTS.stations}?limit=500&commune_code=${selectedCommune}`
-          : `${API_ENDPOINTS.stations}?limit=500`;
-        
-        const response = await api.get(url);
-        console.log('Stations API Response:', response);
-        
-        if (response && response.results && Array.isArray(response.results)) {
-          const stationsList = response.results
-            .filter((s: any) => s.commune_code) // Only include stations with a commune_code
-            .map((s: any) => ({
-              id: s.id,
-              stationcode: s.stationcode,
-              name: s.name,
-              commune_code: s.commune_code,
-              commune: s.commune_name || `Zone ${s.commune_code}` || 'Non classé',
-              status: s.is_installed ? 'active' : 'inactive',
-              available_bikes: s.numbikesavailable || 0,
-              available_docks: s.numdocksavailable || 0,
-              capacity: s.capacity || 0,
-            }));
-          
-          console.log('Processed stations count:', stationsList.length);
-          console.log('Sample station:', stationsList[0]);
-          
-          setAllStations(stationsList);
-          setStations(stationsList);
-          // Set first station as default
-          if (stationsList.length > 0) {
-            setSelectedStation(stationsList[0].stationcode.toString());
-          }
-        } else {
-          console.error('Unexpected response structure:', response);
-          setError('Invalid station data format from API');
+        // Fetch all stations with optional commune filter (paginated)
+        const baseUrl = selectedCommune && selectedCommune !== 'all'
+          ? `${API_ENDPOINTS.stationsAll}?commune_code=${selectedCommune}`
+          : API_ENDPOINTS.stationsAll;
+
+        const response = await api.get(baseUrl);
+        const allResults: any[] = Array.isArray(response) ? response : [];
+
+        const stationsList = allResults
+          .filter((s: any) => s.commune_code)
+          .map((s: any) => ({
+            id: s.id,
+            stationcode: s.stationcode,
+            name: s.name,
+            commune_code: s.commune_code,
+            commune: s.commune_name || `Zone ${s.commune_code}` || 'Non classé',
+            status: s.is_installed ? 'active' : 'inactive',
+            available_bikes: s.numbikesavailable || 0,
+            available_docks: s.numdocksavailable || 0,
+            capacity: s.capacity || 0,
+          }));
+
+        console.log('✅ Processed stations count:', stationsList.length);
+        console.log('📋 Sample station:', stationsList[0]);
+
+        setAllStations(stationsList);
+        setStations(stationsList);
+        if (stationsList.length > 0) {
+          setSelectedStation(stationsList[0].stationcode.toString());
         }
       } catch (err) {
         console.error('Error fetching stations:', err);
@@ -146,6 +169,69 @@ export function StationBehavior() {
     };
     fetchStations();
   }, [selectedCommune]);
+
+  // Fetch popular stations (sources/sinks/ghost) from analytics
+  useEffect(() => {
+    const fetchPopularStations = async () => {
+      try {
+        const [sourcesRes, sinksRes, ghostsRes] = await Promise.all([
+          api.get(`${API_ENDPOINTS.advancedAnalytics}sources/?days=15&limit=6`),
+          api.get(`${API_ENDPOINTS.advancedAnalytics}sinks/?days=15&limit=6`),
+          api.get(`${API_ENDPOINTS.advancedAnalytics}ghost_stations/?days=15&limit=6`),
+        ]);
+
+        const sources = sourcesRes?.sources || [];
+        const sinks = sinksRes?.sinks || [];
+        const ghosts = ghostsRes?.ghost_stations || [];
+
+        const stationToCommune = new Map<number, string>();
+        allStations.forEach((s: any) => stationToCommune.set(s.stationcode, s.commune_code));
+
+        const inSelectedCommune = (stationcode: number) => {
+          if (selectedCommune === 'all') return true;
+          return stationToCommune.get(stationcode)?.toString() === selectedCommune.toString();
+        };
+
+        const mappedSources = sources
+          .filter((s: any) => inSelectedCommune(s.station__stationcode))
+          .map((s: any) => ({
+            name: s.station__name,
+            cv: Number(s.avg_cv || 0).toFixed(1),
+            flux: Number(s.avg_net_flux || 0).toFixed(1),
+            profile: 'commuter_source',
+            trend: 'up',
+          }));
+
+        const mappedSinks = sinks
+          .filter((s: any) => inSelectedCommune(s.station__stationcode))
+          .map((s: any) => ({
+            name: s.station__name,
+            cv: Number(s.avg_cv || 0).toFixed(1),
+            flux: Number(s.avg_net_flux || 0).toFixed(1),
+            profile: 'commuter_sink',
+            trend: 'down',
+          }));
+
+        const mappedGhosts = ghosts
+          .filter((s: any) => inSelectedCommune(s.station__stationcode))
+          .map((s: any) => ({
+            name: s.station__name,
+            cv: Number(s.avg_cv || 0).toFixed(1),
+            flux: Number(s.avg_daily_turnover || 0).toFixed(1),
+            profile: 'ghost_station',
+            trend: 'stable',
+          }));
+
+        const combined = [...mappedSources, ...mappedSinks, ...mappedGhosts].slice(0, 10);
+        setPopularStations(combined);
+      } catch (err) {
+        console.error('Error fetching popular stations:', err);
+        setPopularStations([]);
+      }
+    };
+
+    fetchPopularStations();
+  }, [selectedCommune, allStations]);
 
   // Filter stations by commune and search query
   useEffect(() => {
@@ -197,13 +283,106 @@ export function StationBehavior() {
         if (station) {
           setStationData(station);
           
-          // Update hourly data with station-specific variation
-          setDailyBehaviorData(getDefaultHourlyData());
-          setWeeklyPattern(getDefaultWeeklyData());
-          setMonthlyTrend(getDefaultMonthlyData());
+          try {
+            console.log('📊 Fetching daily analytics for station ID:', station.id);
+            const stationCapacity = station?.capacity || 50;
+
+            const dailyUrl = `${API_ENDPOINTS.analytics}?days=30&station_ids=${station.id}`;
+            const dailyResponse = await api.get(dailyUrl);
+            const dailyResults = dailyResponse?.results || dailyResponse || [];
+
+            const latestDaily = Array.isArray(dailyResults) && dailyResults.length > 0
+              ? dailyResults.slice().sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]
+              : null;
+            const dailyCv = latestDaily ? Number(latestDaily.shannon_entropy || 0) : 0;
+
+            console.log('🔍 Fetching hourly analytics for station ID:', station.id);
+            const hourlyUrl = `${API_ENDPOINTS.hourlyAnalytics}?station_id=${station.id}&days=1`;
+            const hourlyResponse = await api.get(hourlyUrl);
+            const hourlyResults = hourlyResponse?.results || hourlyResponse || [];
+
+            if (Array.isArray(hourlyResults) && hourlyResults.length > 0) {
+              const hourlySorted = hourlyResults
+                .sort((a: any, b: any) => (a.hour ?? 0) - (b.hour ?? 0));
+
+              const dailyData = hourlySorted.map((record: any) => ({
+                hour: `${String(record.hour ?? 0).padStart(2, '0')}:00`,
+                bikes: Number(record.bikes_available_avg || 0),
+                docks: Number(record.docks_available_avg || 0),
+                flux: Number(record.hourly_delta || 0),
+                cv: dailyCv,
+              }));
+
+              setDailyBehaviorData(dailyData);
+            } else {
+              setDailyBehaviorData([]);
+            }
+
+            if (Array.isArray(dailyResults) && dailyResults.length > 0) {
+              const dayNames = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
+              const weeklyByDay = new Map<string, any[]>();
+              dayNames.forEach(d => weeklyByDay.set(d, []));
+
+              dailyResults.forEach((record: any) => {
+                const dateObj = new Date(record.date);
+                const dayName = dayNames[dateObj.getDay()];
+                weeklyByDay.get(dayName)?.push(record);
+              });
+
+              const weeklyData = dayNames.map(day => {
+                const dayRecords = weeklyByDay.get(day) || [];
+                if (dayRecords.length === 0) {
+                  return { day, avgBikes: 0, peakBikes: 0, avgFlux: 0, avgCV: 0 };
+                }
+
+                const avgUtil = dayRecords.reduce((sum: number, r: any) => sum + parseFloat(r.average_utilization || 0), 0) / dayRecords.length;
+                const avgFlux = dayRecords.reduce((sum: number, r: any) => sum + parseFloat(r.net_flux || 0), 0) / dayRecords.length;
+                const avgEntropy = dayRecords.reduce((sum: number, r: any) => sum + parseFloat(r.shannon_entropy || 0), 0) / dayRecords.length;
+                const maxUtil = Math.max(...dayRecords.map(r => parseFloat(r.average_utilization || 0)));
+
+                return {
+                  day,
+                  avgBikes: Math.round((avgUtil / 100) * stationCapacity),
+                  peakBikes: Math.round((maxUtil / 100) * stationCapacity),
+                  avgFlux: Math.round(avgFlux * 100) / 100,
+                  avgCV: Math.round(avgEntropy * 100) / 100,
+                };
+              });
+
+              setWeeklyPattern(weeklyData);
+            } else {
+              setWeeklyPattern([]);
+            }
+
+            console.log('📆 Fetching weekly analytics for station ID:', station.id);
+            const weeklyUrl = `${API_ENDPOINTS.weeklyAnalytics}?weeks=5&station_id=${station.id}`;
+            const weeklyResponse = await api.get(weeklyUrl);
+            const weeklyResults = weeklyResponse?.results || weeklyResponse || [];
+
+            if (Array.isArray(weeklyResults) && weeklyResults.length > 0) {
+              const sortedWeekly = weeklyResults
+                .sort((a: any, b: any) => new Date(a.week_start_date).getTime() - new Date(b.week_start_date).getTime());
+
+              const monthlyData = sortedWeekly.slice(-5).map((record: any, idx: number) => ({
+                date: `Sem ${idx + 1}`,
+                bikes: Math.round((parseFloat(record.average_utilization || 0) / 100) * stationCapacity),
+                flux: Math.round(parseFloat(record.net_flux || 0) * 100) / 100,
+                cv: Math.round(parseFloat(record.shannon_entropy || 0) * 100) / 100,
+              }));
+
+              setMonthlyTrend(monthlyData);
+            } else {
+              setMonthlyTrend([]);
+            }
+          } catch (analyticsErr) {
+            console.error('❌ Error fetching analytics:', analyticsErr);
+            setDailyBehaviorData([]);
+            setWeeklyPattern([]);
+            setMonthlyTrend([]);
+          }
         }
       } catch (err) {
-        console.error('Error fetching station data:', err);
+        console.error('❌ Error fetching station data:', err);
         setError('Failed to load station data');
       } finally {
         setLoading(false);
@@ -240,65 +419,14 @@ export function StationBehavior() {
     return chartExplanations[Math.floor(Math.random() * chartExplanations.length)];
   };
 
-  const handleExplanationClick = (chartType: string) => {
-    setOpenExplanation(chartType);
-    setExplanationText(getAIExplanation(chartType));
-  };
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100">
-      {/* AI Explanation Modal */}
+
+        
+
+      {/* AI Explanation Floating Popup - appears over the specific chart */}
       {openExplanation && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-          <Card className="w-full max-w-2xl border-0 shadow-2xl max-h-[80vh] overflow-y-auto">
-            <div className="p-8">
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-gradient-to-r from-blue-100 to-purple-100 rounded-lg">
-                    <Sparkles className="w-6 h-6 text-purple-600" />
-                  </div>
-                  <h2 className="text-2xl font-bold text-gray-900">Analyse IA</h2>
-                </div>
-                <button
-                  onClick={() => setOpenExplanation(null)}
-                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                >
-                  <X className="w-6 h-6 text-gray-600" />
-                </button>
-              </div>
-              
-              <div className="mb-6 pb-6 border-b border-gray-200">
-                <p className="text-sm font-semibold text-purple-600 uppercase tracking-wide mb-2">
-                  {openExplanation === 'daily' && 'Analyse Temporelle 24h'}
-                  {openExplanation === 'weekly' && 'Motif Hebdomadaire'}
-                  {openExplanation === 'monthly' && 'Tendance Mensuelle'}
-                </p>
-              </div>
-
-              <div className="prose prose-sm max-w-none">
-                <p className="text-gray-700 leading-relaxed text-lg whitespace-pre-wrap">
-                  {explanationText}
-                </p>
-              </div>
-
-              <div className="mt-8 pt-6 border-t border-gray-200 flex justify-end gap-3">
-                <Button
-                  onClick={() => setOpenExplanation(null)}
-                  className="bg-gray-200 hover:bg-gray-300 text-gray-900 font-semibold"
-                >
-                  Fermer
-                </Button>
-                <Button
-                  onClick={() => setExplanationText(getAIExplanation(openExplanation))}
-                  className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white font-semibold"
-                >
-                  <Sparkles className="w-4 h-4 mr-2" />
-                  Générer une autre explication
-                </Button>
-              </div>
-            </div>
-          </Card>
-        </div>
+        <div className="fixed inset-0 z-40 bg-black bg-opacity-50" onClick={() => setOpenExplanation(null)} />
       )}
 
       {/* Header with gradient */}
@@ -359,26 +487,7 @@ export function StationBehavior() {
               </SelectContent>
             </Select>
           </div>
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">Période</label>
-            <Select defaultValue="7days">
-              <SelectTrigger className="border border-gray-300">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="today">Aujourd'hui</SelectItem>
-                <SelectItem value="7days">7 derniers jours</SelectItem>
-                <SelectItem value="30days">30 derniers jours</SelectItem>
-                <SelectItem value="custom">Plage personnalisée</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="flex items-end">
-            <Button className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold">
-              <Search className="w-4 h-4 mr-2" />
-              Analyser
-            </Button>
-          </div>
+        
         </div>
       </Card>
 
@@ -390,12 +499,23 @@ export function StationBehavior() {
               <h2 className="text-4xl font-bold text-gray-900">{stationData?.name || 'Sélectionnez une station'}</h2>
               <p className="text-lg text-gray-600 mt-2">📍 {stationData?.commune || 'Commune Inconnue'}</p>
             </div>
-            <Badge className={`text-base px-4 py-2 font-bold ${
-              stationData?.status === 'active' 
+            <Badge className={`text-base px-4 py-2 font-bold flex items-center gap-2 ${
+              // Check if station is critical (CV = 0, meaning no activity/variation)
+              dailyBehaviorData.length > 0 && Math.max(...dailyBehaviorData.map(d => d.cv)) === 0
+                ? 'bg-gradient-to-r from-red-500 to-orange-500 text-white animate-pulse' 
+                : stationData?.status === 'active' 
                 ? 'bg-gradient-to-r from-green-100 to-emerald-100 text-green-700' 
                 : 'bg-gradient-to-r from-red-100 to-pink-100 text-red-700'
             }`}>
-              {stationData?.status === 'active' ? '✓ Opérationnelle' : '✗ Inactive'}
+              {dailyBehaviorData.length > 0 && Math.max(...dailyBehaviorData.map(d => d.cv)) === 0 
+                ? <>
+                    <AlertCircle className="w-5 h-5" />
+                    ⚠️ CRITIQUE - Pas d'Activité
+                  </>
+                : stationData?.status === 'active' 
+                ? '✓ Opérationnelle' 
+                : '✗ Inactive'
+              }
             </Badge>
           </div>
         </div>
@@ -434,11 +554,63 @@ export function StationBehavior() {
       {/* Main Charts */}
       <div className="grid grid-cols-1 gap-6 mb-8">
         {/* 24-Hour Behavior - Flux and CV Analysis */}
-        <Card className="p-6 border-0 shadow-md">
+        <Card className="p-6 border-0 shadow-md relative overflow-hidden">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-bold text-gray-900">Analyse Temporelle 24h</h3>
+            <h3 className="text-lg font-bold text-gray-900">Analyse Quotidienne 24h</h3>
+            <button
+              onClick={() => handleExplanationClick('daily')}
+              disabled={explanationLoading}
+              className="px-4 py-2 bg-white border-2 border-gray-300 hover:border-green-600 hover:bg-green-50 disabled:opacity-50 text-black font-bold text-sm rounded-lg flex items-center gap-2 transition-all duration-200 hover:shadow-md cursor-pointer"
+            >
+              <Brain className="w-4 h-4" />
+              IA
+            </button>
           </div>
-          <p className="text-sm text-gray-600 mb-5">Flux de Transit (variation du nombre de vélos) et Coefficient de Variation (variabilité d'activité)</p>
+          
+          {/* Floating Explanation Popup for Daily Chart */}
+          {openExplanation === 'daily' && (
+            <div className="absolute top-14 right-6 z-50 w-96 h-96 bg-white border-2 border-purple-300 rounded-xl shadow-2xl p-6 overflow-y-auto flex flex-col">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-purple-600" />
+                  <p className="text-sm font-bold text-purple-600 uppercase">Analyse IA</p>
+                </div>
+                <button
+                  onClick={() => setOpenExplanation(null)}
+                  className="p-1 hover:bg-gray-100 rounded transition-colors"
+                >
+                  <X className="w-4 h-4 text-gray-600" />
+                </button>
+              </div>
+              {explanationLoading ? (
+                <div className="flex-grow flex items-center justify-center">
+                  <div className="text-center">
+                    <div className="relative w-16 h-16 mx-auto mb-4">
+                      <div className="absolute inset-0 rounded-full bg-gradient-to-r from-purple-300 to-blue-300 animate-pulse"></div>
+                      <div className="absolute inset-2 rounded-full bg-white"></div>
+                      <Loader className="absolute inset-0 m-auto w-8 h-8 text-purple-600 animate-spin" />
+                    </div>
+                    <p className="text-sm font-semibold text-gray-900">Generating analysis...</p>
+                    <p className="text-xs text-gray-500 mt-1">🤖 AI is thinking...</p>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <p className="text-sm text-gray-700 leading-relaxed mb-4 flex-grow">{explanationText}</p>
+                  <button
+                    onClick={() => fetchAIExplanation('daily')}
+                    disabled={explanationLoading}
+                    className="mt-auto w-full px-3 py-2 bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 disabled:opacity-50 text-white text-xs font-semibold rounded transition-all"
+                  >
+                    <Sparkles className="w-3 h-3 inline mr-1" />
+                    Générer une autre explication
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+
+          <p className="text-sm text-gray-600 mb-5">Nombre de vélos disponibles, Flux horaire (vélos/heure) et CV (%) sur les 24 dernières heures</p>
           <div className="relative">
             <ResponsiveContainer width="100%" height={350}>
             <AreaChart data={dailyBehaviorData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
@@ -454,66 +626,108 @@ export function StationBehavior() {
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
               <XAxis dataKey="hour" stroke="#6b7280" />
-              <YAxis yAxisId="left" stroke="#6b7280" label={{ value: 'Vélos & Places', angle: -90, position: 'insideLeft' }} />
-              <YAxis yAxisId="right" orientation="right" stroke="#6b7280" label={{ value: 'Flux / Entropie', angle: 90, position: 'insideRight' }} />
+              <YAxis yAxisId="left" stroke="#6b7280" label={{ value: 'Vélos Disponibles', angle: -90, position: 'insideLeft' }} />
+              <YAxis yAxisId="right" orientation="right" stroke="#6b7280" label={{ value: 'Flux / CV (%)', angle: 90, position: 'insideRight' }} />
               <Tooltip contentStyle={{ backgroundColor: '#1f2937', border: 'none', borderRadius: '8px', color: '#fff' }} />
               <Legend wrapperStyle={{ paddingTop: '20px' }} />
               <Area yAxisId="left" type="monotone" dataKey="bikes" stackId="1" stroke="#10b981" fillOpacity={1} fill="url(#dailyBikes)" name="Vélos Disponibles" />
               <Area yAxisId="left" type="monotone" dataKey="docks" stackId="1" stroke="#3b82f6" fillOpacity={1} fill="url(#dailyDocks)" name="Places Disponibles" />
-              <Line yAxisId="right" type="monotone" dataKey="flux" stroke="#ef4444" strokeWidth={2} name="Flux de Transit (Δ vélos)" dot={{ fill: '#ef4444', r: 3 }} />
+              <Line yAxisId="right" type="monotone" dataKey="flux" stroke="#ef4444" strokeWidth={2} name="Flux Horaire (vélos/h)" dot={{ fill: '#ef4444', r: 3 }} />
               <Line yAxisId="right" type="monotone" dataKey="cv" stroke="#8b5cf6" strokeWidth={2} name="CV (%)" dot={{ fill: '#8b5cf6', r: 3 }} strokeDasharray="5 5" />
-                <button
-              onClick={() => handleExplanationClick('daily')}
-              className="absolute bottom-2 right-6 z-[100] px-3 py-2 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-semibold text-xs rounded-lg flex items-center gap-1 transition-all duration-200 hover:shadow-lg cursor-pointer"
-            >
-              <Brain className="w-4 h-4" />
-              IA
-            </button>
+
             </AreaChart>
           </ResponsiveContainer>
+          </div>
 
+          <div className="grid grid-cols-3 gap-4 mt-6 pt-6 border-t border-gray-200">
+            <div className="p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border border-green-200">
+              <p className="text-sm font-semibold text-gray-600">Flux Positif Max</p>
+              <p className="text-2xl font-bold text-green-600">
+                {dailyBehaviorData.length > 0 
+                  ? Math.max(...dailyBehaviorData.map(d => d.flux), 0).toFixed(2)
+                  : '0'} v/h
+              </p>
+              <p className="text-sm text-gray-600 mt-1">Approvisionne d'autres</p>
+            </div>
+            <div className="p-4 bg-gradient-to-r from-red-50 to-pink-50 rounded-lg border border-red-200">
+              <p className="text-sm font-semibold text-gray-600">Flux Négatif Min</p>
+              <p className="text-2xl font-bold text-red-600">
+                {dailyBehaviorData.length > 0 
+                  ? Math.min(...dailyBehaviorData.map(d => d.flux), 0).toFixed(2)
+                  : '0'} v/h
+              </p>
+              <p className="text-sm text-gray-600 mt-1">Demande d'autres</p>
+            </div>
+            <div className="p-4 bg-gradient-to-r from-purple-50 to-indigo-50 rounded-lg border border-purple-200">
+              <p className="text-sm font-semibold text-gray-600">CV Max</p>
+              <p className="text-2xl font-bold text-purple-600">
+                {dailyBehaviorData.length > 0 
+                  ? Math.max(...dailyBehaviorData.map(d => d.cv)).toFixed(2)
+                  : '0'}
+              </p>
+              <p className="text-sm text-gray-600 mt-1">Imprévisibilité (0-8)</p>
+            </div>
+          </div>
+        </Card>
+
+        {/* Weekly Pattern */}
+        <Card className="p-6 border-0 shadow-md relative overflow-hidden">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-bold text-gray-900">Motif Hebdomadaire</h3>
             <button
-              onClick={() => handleExplanationClick('daily')}
-              className="absolute bottom-2 right-6 z-[100] px-3 py-2 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-semibold text-xs rounded-lg flex items-center gap-1 transition-all duration-200 hover:shadow-lg cursor-pointer"
+              onClick={() => handleExplanationClick('weekly')}
+              disabled={explanationLoading}
+              className="px-4 py-2 bg-white border-2 border-gray-300 hover:border-green-600 hover:bg-green-50 disabled:opacity-50 text-black font-bold text-sm rounded-lg flex items-center gap-2 transition-all duration-200 hover:shadow-md cursor-pointer"
             >
               <Brain className="w-4 h-4" />
               IA
             </button>
           </div>
           
-          <div className="grid grid-cols-3 gap-4 mt-6 pt-6 border-t border-gray-200">
-            <div className="p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border border-green-200">
-              <p className="text-sm font-semibold text-gray-600">Flux Positif (Source)</p>
-              <p className="text-2xl font-bold text-green-600">+8.5 vélos/h</p>
-              <p className="text-sm text-gray-600 mt-1">08:00 - 09:00</p>
+          {/* Floating Explanation Popup for Weekly Chart */}
+          {openExplanation === 'weekly' && (
+            <div className="absolute top-14 right-6 z-50 w-96 h-96 bg-white border-2 border-purple-300 rounded-xl shadow-2xl p-6 overflow-y-auto flex flex-col">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-purple-600" />
+                  <p className="text-sm font-bold text-purple-600 uppercase">Analyse IA</p>
+                </div>
+                <button
+                  onClick={() => setOpenExplanation(null)}
+                  className="p-1 hover:bg-gray-100 rounded transition-colors"
+                >
+                  <X className="w-4 h-4 text-gray-600" />
+                </button>
+              </div>
+              {explanationLoading ? (
+                <div className="flex-grow flex items-center justify-center">
+                  <div className="text-center">
+                    <div className="relative w-16 h-16 mx-auto mb-4">
+                      <div className="absolute inset-0 rounded-full bg-gradient-to-r from-purple-300 to-blue-300 animate-pulse"></div>
+                      <div className="absolute inset-2 rounded-full bg-white"></div>
+                      <Loader className="absolute inset-0 m-auto w-8 h-8 text-purple-600 animate-spin" />
+                    </div>
+                    <p className="text-sm font-semibold text-gray-900">Generating analysis...</p>
+                    <p className="text-xs text-gray-500 mt-1">🤖 AI is thinking...</p>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <p className="text-sm text-gray-700 leading-relaxed mb-4 flex-grow">{explanationText}</p>
+                  <button
+                    onClick={() => fetchAIExplanation('weekly')}
+                    disabled={explanationLoading}
+                    className="mt-auto w-full px-3 py-2 bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 disabled:opacity-50 text-white text-xs font-semibold rounded transition-all"
+                  >
+                    <Sparkles className="w-3 h-3 inline mr-1" />
+                    Générer une autre explication
+                  </button>
+                </>
+              )}
             </div>
-            <div className="p-4 bg-gradient-to-r from-red-50 to-pink-50 rounded-lg border border-red-200">
-              <p className="text-sm font-semibold text-gray-600">Flux Négatif (Puits)</p>
-              <p className="text-2xl font-bold text-red-600">-7.2 vélos/h</p>
-              <p className="text-sm text-gray-600 mt-1">18:00 - 19:00</p>
-            </div>
-            <div className="p-4 bg-gradient-to-r from-purple-50 to-indigo-50 rounded-lg border border-purple-200">
-              <p className="text-sm font-semibold text-gray-600">Entropie Max (Dynamique)</p>
-              <p className="text-2xl font-bold text-purple-600">3.8</p>
-              <p className="text-sm text-gray-600 mt-1">Haute imprévisibilité</p>
-            </div>
-          </div>
+          )}
 
-           <button
-              onClick={() => handleExplanationClick('daily')}
-              className="absolute bottom-2 right-6 z-[100] px-3 py-2 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-semibold text-xs rounded-lg flex items-center gap-1 transition-all duration-200 hover:shadow-lg cursor-pointer"
-            >
-              <Brain className="w-4 h-4" />
-              IA
-            </button>
-        </Card>
-
-        {/* Weekly Pattern */}
-        <Card className="p-6 border-0 shadow-md">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-bold text-gray-900">Motif Hebdomadaire</h3>
-          </div>
-          <p className="text-sm text-gray-600 mb-5">Flux moyen et entropie par jour de la semaine</p>
+          <p className="text-sm text-gray-600 mb-5">Flux moyen et CV par jour de la semaine</p>
           <div className="relative">
             <ResponsiveContainer width="100%" height={320}>
             <BarChart data={weeklyPattern} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
@@ -530,29 +744,74 @@ export function StationBehavior() {
               <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
               <XAxis dataKey="day" stroke="#6b7280" />
               <YAxis yAxisId="left" stroke="#6b7280" label={{ value: 'Flux Moyen', angle: -90, position: 'insideLeft' }} />
-              <YAxis yAxisId="right" orientation="right" stroke="#6b7280" label={{ value: 'Entropie Moyenne', angle: 90, position: 'insideRight' }} />
+              <YAxis yAxisId="right" orientation="right" stroke="#6b7280" label={{ value: 'CV Moyen (%)', angle: 90, position: 'insideRight' }} />
               <Tooltip contentStyle={{ backgroundColor: '#1f2937', border: 'none', borderRadius: '8px', color: '#fff' }} />
               <Legend wrapperStyle={{ paddingTop: '20px' }} />
               <Bar yAxisId="left" dataKey="avgFlux" fill="url(#weekFlux)" name="Flux de Transit Moyen" />
-              <Line yAxisId="right" type="monotone" dataKey="avgCV" stroke="#8b5cf6" strokeWidth={2} name="CV Moyenne (%)" dot={{ fill: '#8b5cf6', r: 5 }} />
+              <Line yAxisId="right" type="monotone" dataKey="avgCV" stroke="#8b5cf6" strokeWidth={2} name="CV Moyen (%)" dot={{ fill: '#8b5cf6', r: 5 }} />
             </BarChart>
           </ResponsiveContainer>
+          </div>
+        </Card>
+
+        {/* Monthly Trend - Flux and CV Evolution */}
+        <Card className="p-6 border-0 shadow-md relative overflow-hidden">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-bold text-gray-900">Tendance Mensuelle</h3>
             <button
-              onClick={() => handleExplanationClick('weekly')}
-              className="absolute bottom-2 right-6 z-[100] px-3 py-2 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-semibold text-xs rounded-lg flex items-center gap-1 transition-all duration-200 hover:shadow-lg cursor-pointer"
+              onClick={() => handleExplanationClick('monthly')}
+              disabled={explanationLoading}
+              className="px-4 py-2 bg-white border-2 border-gray-300 hover:border-green-600 hover:bg-green-50 disabled:opacity-50 text-black font-bold text-sm rounded-lg flex items-center gap-2 transition-all duration-200 hover:shadow-md cursor-pointer"
             >
               <Brain className="w-4 h-4" />
               IA
             </button>
           </div>
-        </Card>
+          
+          {/* Floating Explanation Popup for Monthly Chart */}
+          {openExplanation === 'monthly' && (
+            <div className="absolute top-14 right-6 z-50 w-96 h-96 bg-white border-2 border-purple-300 rounded-xl shadow-2xl p-6 overflow-y-auto flex flex-col">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-purple-600" />
+                  <p className="text-sm font-bold text-purple-600 uppercase">Analyse IA</p>
+                </div>
+                <button
+                  onClick={() => setOpenExplanation(null)}
+                  className="p-1 hover:bg-gray-100 rounded transition-colors"
+                >
+                  <X className="w-4 h-4 text-gray-600" />
+                </button>
+              </div>
+              {explanationLoading ? (
+                <div className="flex-grow flex items-center justify-center">
+                  <div className="text-center">
+                    <div className="relative w-16 h-16 mx-auto mb-4">
+                      <div className="absolute inset-0 rounded-full bg-gradient-to-r from-purple-300 to-blue-300 animate-pulse"></div>
+                      <div className="absolute inset-2 rounded-full bg-white"></div>
+                      <Loader className="absolute inset-0 m-auto w-8 h-8 text-purple-600 animate-spin" />
+                    </div>
+                    <p className="text-sm font-semibold text-gray-900">Generating analysis...</p>
+                    <p className="text-xs text-gray-500 mt-1">🤖 AI is thinking...</p>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <p className="text-sm text-gray-700 leading-relaxed mb-4 flex-grow">{explanationText}</p>
+                  <button
+                    onClick={() => fetchAIExplanation('monthly')}
+                    disabled={explanationLoading}
+                    className="mt-auto w-full px-3 py-2 bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 disabled:opacity-50 text-white text-xs font-semibold rounded transition-all"
+                  >
+                    <Sparkles className="w-3 h-3 inline mr-1" />
+                    Générer une autre explication
+                  </button>
+                </>
+              )}
+            </div>
+          )}
 
-        {/* Monthly Trend - Flux and CV Evolution */}
-        <Card className="p-6 border-0 shadow-md">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-bold text-gray-900">Tendance Mensuelle</h3>
-          </div>
-          <p className="text-sm text-gray-600 mb-5">Évolution du flux de transit et de l'entropie Shannon</p>
+          <p className="text-sm text-gray-600 mb-5">Évolution du flux de transit et du CV</p>
           <div className="relative">
             <ResponsiveContainer width="100%" height={320}>
             <LineChart data={monthlyTrend} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
@@ -569,20 +828,13 @@ export function StationBehavior() {
               <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
               <XAxis dataKey="date" stroke="#6b7280" />
               <YAxis yAxisId="left" stroke="#6b7280" label={{ value: 'Flux (vélos/jour)', angle: -90, position: 'insideLeft' }} />
-              <YAxis yAxisId="right" orientation="right" stroke="#6b7280" label={{ value: 'Entropie', angle: 90, position: 'insideRight' }} />
+              <YAxis yAxisId="right" orientation="right" stroke="#6b7280" label={{ value: 'CV (%)', angle: 90, position: 'insideRight' }} />
               <Tooltip contentStyle={{ backgroundColor: '#1f2937', border: 'none', borderRadius: '8px', color: '#fff' }} />
               <Legend wrapperStyle={{ paddingTop: '20px' }} />
               <Line yAxisId="left" type="monotone" dataKey="flux" stroke="#ef4444" strokeWidth={3} name="Flux de Transit Total" dot={{ fill: '#ef4444', r: 5 }} />
-              <Line yAxisId="right" type="monotone" dataKey="cv" stroke="#8b5cf6" strokeWidth={3} name="CV Moyenne (%)" dot={{ fill: '#8b5cf6', r: 5 }} strokeDasharray="5 5" />
+              <Line yAxisId="right" type="monotone" dataKey="cv" stroke="#8b5cf6" strokeWidth={3} name="CV Moyen (%)" dot={{ fill: '#8b5cf6', r: 5 }} strokeDasharray="5 5" />
             </LineChart>
           </ResponsiveContainer>
-            <button
-              onClick={() => handleExplanationClick('monthly')}
-              className="absolute bottom-2 right-6 z-[100] px-3 py-2 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-semibold text-xs rounded-lg flex items-center gap-1 transition-all duration-200 hover:shadow-lg cursor-pointer"
-            >
-              <Brain className="w-4 h-4" />
-              IA
-            </button>
           </div>
         </Card>
       </div>
@@ -641,6 +893,11 @@ export function StationBehavior() {
                     {station.profile === 'balanced_hub' && (
                       <Badge className="bg-gradient-to-r from-orange-100 to-yellow-100 text-orange-700 font-bold">
                         Hub Équilibré
+                      </Badge>
+                    )}
+                    {station.profile === 'ghost_station' && (
+                      <Badge className="bg-gradient-to-r from-purple-100 to-indigo-100 text-purple-700 font-bold">
+                        Station Fantôme
                       </Badge>
                     )}
                   </td>

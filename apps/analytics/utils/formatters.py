@@ -43,7 +43,7 @@ def format_station_data(station, status=None):
         'latitude': float(station.latitude),
         'longitude': float(station.longitude),
         'total_docks': station.total_docks,
-        'is_active': station.is_active,
+        'is_installed': station.is_installed,
     }
     
     if status:

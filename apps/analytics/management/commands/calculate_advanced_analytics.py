@@ -1,6 +1,11 @@
 """
 Management command to calculate advanced analytics for all stations over a date range.
 
+Calculates:
+1. Hourly analytics from StationStatus records
+2. Daily analytics from hourly deltas and entropy
+3. Weekly analytics aggregated from daily records
+
 Usage:
     python manage.py calculate_advanced_analytics --start-date 2025-01-01 --end-date 2025-01-15
     python manage.py calculate_advanced_analytics --days 15  # Last 15 days
@@ -11,12 +16,12 @@ from django.core.management.base import BaseCommand
 from django.utils import timezone
 from django.db import transaction
 
-from apps.analytics.models import BikeStation, DailyAnalytics
+from apps.analytics.models import BikeStation, DailyAnalytics, WeeklyAnalytics, HourlyAnalytics
 from apps.analytics.services.advanced_analytics_service import AdvancedAnalyticsService
 
 
 class Command(BaseCommand):
-    help = 'Calculate advanced analytics (entropy, flux, profiles) for all stations'
+    help = 'Calculate advanced analytics (hourly, daily, weekly) for all stations'
     
     def add_arguments(self, parser):
         parser.add_argument(
@@ -39,6 +44,11 @@ class Command(BaseCommand):
             '--station-id',
             type=str,
             help='Specific station ID (optional, for testing)'
+        )
+        parser.add_argument(
+            '--skip-weekly',
+            action='store_true',
+            help='Skip weekly analytics calculation'
         )
     
     def handle(self, *args, **options):
@@ -64,9 +74,13 @@ class Command(BaseCommand):
         total_stations = stations.count()
         self.stdout.write(f"Processing {total_stations} stations...")
         
-        # Iterate through each station and date
+        # ============ DAILY ANALYTICS ============
+        self.stdout.write("\n" + "="*60)
+        self.stdout.write("CALCULATING DAILY ANALYTICS...")
+        self.stdout.write("="*60)
+        
         current_date = start_date
-        total_records = 0
+        total_daily_records = 0
         error_count = 0
         
         while current_date <= end_date:
@@ -75,6 +89,26 @@ class Command(BaseCommand):
             for idx, station in enumerate(stations):
                 try:
                     with transaction.atomic():
+                        # Calculate and persist hourly analytics
+                        hourly_records = AdvancedAnalyticsService.calculate_hourly_analytics(
+                            station, current_date
+                        )
+                        for record in hourly_records:
+                            HourlyAnalytics.objects.update_or_create(
+                                timestamp=record['timestamp'],
+                                station=station,
+                                commune=None,
+                                defaults={
+                                    'date': record['date'],
+                                    'hour': record['hour'],
+                                    'average_utilization': record['average_utilization'],
+                                    'bikes_available_avg': record['bikes_available_avg'],
+                                    'docks_available_avg': record['docks_available_avg'],
+                                    'hourly_delta': record['hourly_delta'],
+                                    'data_points': record['data_points'],
+                                }
+                            )
+
                         analytics_data = AdvancedAnalyticsService.calculate_daily_analytics(
                             station, current_date
                         )
@@ -97,28 +131,82 @@ class Command(BaseCommand):
                                 station.profile = 'commuter_source'
                             elif daily.is_sink:
                                 station.profile = 'commuter_sink'
-                            
                             station.save()
                             
-                            total_records += 1
+                            total_daily_records += 1
                             
                             if (idx + 1) % 100 == 0:
                                 self.stdout.write(
-                                    f"  {idx + 1}/{total_stations} stations processed ({total_records} analytics created)"
+                                    f"  {idx + 1}/{total_stations} stations processed ({total_daily_records} analytics created)"
                                 )
                 
                 except Exception as e:
                     error_count += 1
                     self.stdout.write(
-                        self.style.ERROR(f"Error processing {station.station_id}: {str(e)}")
+                        self.style.ERROR(f"Error processing {station.stationcode}: {str(e)}")
                     )
             
             current_date += timedelta(days=1)
         
-        # Print summary
+        # ============ WEEKLY ANALYTICS ============
+        if not options['skip_weekly']:
+            self.stdout.write("\n" + "="*60)
+            self.stdout.write("CALCULATING WEEKLY ANALYTICS...")
+            self.stdout.write("="*60)
+            
+            # Calculate weeks from start_date to end_date
+            current_date = start_date
+            total_weekly_records = 0
+            
+            while current_date <= end_date:
+                # Get Monday of this week
+                monday = current_date - timedelta(days=current_date.weekday())
+                sunday = monday + timedelta(days=6)
+                
+                # Only process if Monday is within our range
+                if monday <= end_date:
+                    self.stdout.write(f"\nProcessing week {monday} to {sunday}...")
+                    
+                    for idx, station in enumerate(stations):
+                        try:
+                            with transaction.atomic():
+                                analytics_data = AdvancedAnalyticsService.calculate_weekly_analytics(
+                                    station, monday
+                                )
+                                
+                                if analytics_data:
+                                    # Update or create WeeklyAnalytics record
+                                    weekly, created = WeeklyAnalytics.objects.update_or_create(
+                                        week_start_date=monday,
+                                        station=station,
+                                        commune=None,
+                                        defaults={
+                                            'week_end_date': sunday,
+                                            **analytics_data
+                                        }
+                                    )
+                                    total_weekly_records += 1
+                                    
+                                    if (idx + 1) % 100 == 0:
+                                        self.stdout.write(
+                                            f"  {idx + 1}/{total_stations} stations processed ({total_weekly_records} weekly analytics created)"
+                                        )
+                        
+                        except Exception as e:
+                            self.stdout.write(
+                                self.style.ERROR(f"Error processing weekly for {station.stationcode}: {str(e)}")
+                            )
+                
+                # Move to next week
+                current_date = monday + timedelta(days=7)
+        
+        # ============ SUMMARY ============
         self.stdout.write("\n" + "="*60)
-        self.stdout.write(self.style.SUCCESS("Completed!"))
-        self.stdout.write(f"Total records created: {total_records}")
+        self.stdout.write(self.style.SUCCESS("✅ ANALYTICS CALCULATION COMPLETE!"))
+        self.stdout.write("="*60)
+        self.stdout.write(f"Daily Analytics Records: {total_daily_records}")
+        if not options['skip_weekly']:
+            self.stdout.write(f"Weekly Analytics Records: {total_weekly_records}")
         self.stdout.write(f"Errors: {error_count}")
         
         # Show top sources and sinks
@@ -130,18 +218,18 @@ class Command(BaseCommand):
         
         for i, source in enumerate(results['sources'], 1):
             self.stdout.write(
-                f"{i}. {source['station__name']} ({source['station__station_id']})\n"
+                f"{i}. {source['station__name']} ({source['station__stationcode']})\n"
                 f"   Avg Net Flux: {source['avg_net_flux']:.2f} | "
-                f"Entropy: {source['avg_entropy']:.2f} | "
+                f"Entropy: {source['avg_cv']:.2f} | "
                 f"Days as Source: {source['days_as_source']}"
             )
         
         self.stdout.write("\nTOP SINKS (Demand bikes):")
         for i, sink in enumerate(results['sinks'], 1):
             self.stdout.write(
-                f"{i}. {sink['station__name']} ({sink['station__station_id']})\n"
+                f"{i}. {sink['station__name']} ({sink['station__stationcode']})\n"
                 f"   Avg Net Flux: {sink['avg_net_flux']:.2f} | "
-                f"Entropy: {sink['avg_entropy']:.2f} | "
+                f"Entropy: {sink['avg_cv']:.2f} | "
                 f"Days as Sink: {sink['days_as_sink']}"
             )
         
@@ -154,8 +242,8 @@ class Command(BaseCommand):
         
         for i, ghost in enumerate(ghost_stations, 1):
             self.stdout.write(
-                f"{i}. {ghost['station__name']} ({ghost['station__station_id']})\n"
-                f"   Avg Entropy: {ghost['avg_entropy']:.2f} | "
+                f"{i}. {ghost['station__name']} ({ghost['station__stationcode']})\n"
+                f"   Avg Entropy: {ghost['avg_cv']:.2f} | "
                 f"Avg Turnover: {ghost['avg_daily_turnover']:.2f} | "
                 f"Ghost Days: {ghost['ghost_occurrences']}"
             )

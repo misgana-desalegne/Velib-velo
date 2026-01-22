@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Commune, BikeStation, StationStatus, DailyAnalytics
+from .models import Commune, BikeStation, StationStatus, DailyAnalytics, HourlyAnalytics, WeeklyAnalytics
 
 
 class CommuneSerializer(serializers.ModelSerializer):
@@ -11,6 +11,7 @@ class CommuneSerializer(serializers.ModelSerializer):
 
 
 class BikeStationSerializer(serializers.ModelSerializer):
+    stationcode = serializers.CharField(read_only=True)
     commune_code = serializers.CharField(source='commune.code', read_only=True)
     commune_name = serializers.CharField(source='commune.name', read_only=True)
     
@@ -41,6 +42,30 @@ class DailyAnalyticsSerializer(serializers.ModelSerializer):
         fields = ['id', 'date', 'commune', 'commune_code', 'station', 
                   'station_name', 'average_utilization', 'peak_hour',
                   'shannon_entropy', 'net_flux', 'is_source', 'is_sink', 'is_ghost']
+
+
+class HourlyAnalyticsSerializer(serializers.ModelSerializer):
+    commune_code = serializers.CharField(source='commune.code', read_only=True)
+    station_name = serializers.CharField(source='station.name', read_only=True)
+
+    class Meta:
+        model = HourlyAnalytics
+        fields = ['id', 'timestamp', 'date', 'hour', 'commune', 'commune_code', 'station',
+                  'station_name', 'average_utilization', 'bikes_available_avg',
+                  'docks_available_avg', 'hourly_delta', 'data_points']
+
+
+class WeeklyAnalyticsSerializer(serializers.ModelSerializer):
+    commune_code = serializers.CharField(source='commune.code', read_only=True)
+    station_name = serializers.CharField(source='station.name', read_only=True)
+
+    class Meta:
+        model = WeeklyAnalytics
+        fields = ['id', 'week_start_date', 'week_end_date', 'commune', 'commune_code',
+                  'station', 'station_name', 'average_utilization', 'peak_day',
+                  'peak_hour', 'average_hourly_delta', 'shannon_entropy', 'net_flux',
+                  'persistence_at_full', 'persistence_at_empty', 'is_source',
+                  'is_sink', 'is_ghost', 'operational_hours', 'maintenance_incidents']
 
 
 class CommuneAnalyticsSerializer(serializers.Serializer):
