@@ -2,7 +2,7 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
     CommuneViewSet, BikeStationViewSet, StationStatusViewSet,
-    DailyAnalyticsViewSet, AnalyticsViewSet, StationProfileViewSet,
+    DailyAnalyticsViewSet, HourlyAnalyticsViewSet, WeeklyAnalyticsViewSet, AnalyticsViewSet, StationProfileViewSet,
     live_dashboard, commune_summary, commune_list
 )
 from .auth_views import RegisterView, LoginView, LogoutView, CurrentUserView
@@ -13,6 +13,8 @@ router.register(r'stations', BikeStationViewSet)
 router.register(r'stations-profile', StationProfileViewSet, basename='station-profile')
 router.register(r'status', StationStatusViewSet)
 router.register(r'analytics', DailyAnalyticsViewSet)
+router.register(r'hourly-analytics', HourlyAnalyticsViewSet)
+router.register(r'weekly-analytics', WeeklyAnalyticsViewSet)
 router.register(r'advanced-analytics', AnalyticsViewSet, basename='advanced-analytics')
 
 urlpatterns = [

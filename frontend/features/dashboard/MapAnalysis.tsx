@@ -68,56 +68,84 @@ export function MapAnalysis() {
         setLoading(true);
         setError(null);
         
-        // Fetch all stations from API - handle pagination
+        // Fetch all stations with pagination
         let allStations: any[] = [];
-        let nextUrl: string | null = API_ENDPOINTS.stations;
+        let nextUrl: string | null = `${API_ENDPOINTS.stations}?limit=1000`;
         
-        // Collect all paginated results
         while (nextUrl) {
           try {
+            console.log(`Fetching from: ${nextUrl}`);
             const response = await api.get(nextUrl);
             
-            // Handle paginated response
+            // Handle paginated response from DRF
             if (response.results && Array.isArray(response.results)) {
               allStations = allStations.concat(response.results);
-              nextUrl = response.next || null;
+              console.log(`Got ${response.results.length} stations, total now: ${allStations.length}`);
+              nextUrl = response.next ? response.next.replace(/^https?:\/\/[^/]+/, '') : null;
             } else if (Array.isArray(response)) {
-              // Direct array response
+              // Direct array response (no pagination)
               allStations = response;
+              console.log(`Got ${response.length} stations (direct array)`);
               nextUrl = null;
             } else {
               throw new Error('Unexpected response format');
             }
           } catch (pageErr) {
             console.error('Error fetching page:', pageErr);
-            if (allStations.length === 0) {
-              throw pageErr;
-            }
-            break; // Continue with what we have
+            if (allStations.length === 0) throw pageErr;
+            break;
           }
         }
         
+        console.log(`Total stations fetched: ${allStations.length}`);
+        
         if (allStations.length > 0) {
+          // Debug: Check first 3 station coordinates
+          console.log('First 3 raw stations:');
+          for (let i = 0; i < Math.min(3, allStations.length); i++) {
+            console.log(`  Station ${i}:`, {
+              id: allStations[i].id,
+              name: allStations[i].name,
+              latitude: allStations[i].latitude,
+              longitude: allStations[i].longitude,
+            });
+          }
+          
           const transformedStations = allStations.map((s: any, idx: number) => {
             // Use mechanical + ebike since numbikesavailable is always 0
             const bikes = (s.mechanical || 0) + (s.ebike || 0);
             const capacity = s.capacity || 1;
             const status = getStatusFromUtilization(bikes, capacity - bikes);
             
+            // Parse coordinates - MUST use latitude and longitude from API
+            const lat = s.latitude !== undefined && s.latitude !== null ? parseFloat(s.latitude) : 48.8566;
+            const lng = s.longitude !== undefined && s.longitude !== null ? parseFloat(s.longitude) : 2.3522;
+            
+            // Validate parsed values
+            const validLat = !isNaN(lat) && lat > 0 ? lat : 48.8566;
+            const validLng = !isNaN(lng) && lng > 0 ? lng : 2.3522;
+            
             return {
               id: s.id || idx,
               name: s.name || s.stationcode || s.station || `Station ${s.id}`,
-              lat: parseFloat(s.latitude) || 48.85,
-              lng: parseFloat(s.longitude) || 2.35,
+              lat: validLat,
+              lng: validLng,
               bikes: bikes,
-              docks: capacity - bikes, // Remaining capacity
+              docks: capacity - bikes,
               capacity: capacity,
               status: status,
-              arr: s.commune_name || s.commune || `Commune ${s.id}`,              communeCode: s.commune_code || '',              profile: s.profile || 'unknown',
+              arr: s.commune_name || s.commune || `Commune ${s.id}`,
+              communeCode: s.commune_code || '',
+              profile: s.profile || 'unknown',
               isGhost: s.profile === 'ghost_station',
             };
           });
           
+          console.log(`Map: Loaded ${transformedStations.length} stations`);
+          console.log('First 3 transformed stations:');
+          for (let i = 0; i < Math.min(3, transformedStations.length); i++) {
+            console.log(`  ${i}: (${transformedStations[i].lat}, ${transformedStations[i].lng}) - ${transformedStations[i].name}`);
+          }
           setStations(transformedStations);
         } else {
           setError('No stations found');
@@ -205,14 +233,18 @@ export function MapAnalysis() {
 
       mapRef.current = map;
 
-      // Add zoom listener for arrondissement details
-      map.on('zoom', () => {
+      // Add zoom listener for updating hierarchical clustering
+      const zoomListener = () => {
         const zoom = map.getZoom();
+        console.log(`Zoom changed to: ${zoom}`);
         setMapZoom(zoom);
         updateArrondissementDisplay(map, zoom);
-      });
+      };
+      
+      map.on('zoom', zoomListener);
 
       // Initial display
+      setMapZoom(12);
       updateArrondissementDisplay(map, 12);
     }
   }, []);
@@ -278,33 +310,36 @@ export function MapAnalysis() {
     });
   };
 
-  // Update markers when filtered stations change - uses clustering
-  useEffect(() => {
+  // Hierarchical clustering: districts at low zoom, individual stations at high zoom
+  const updateHierarchicalClusters = (zoom: number) => {
     if (!mapRef.current) return;
+
+    console.log(`Zoom level: ${zoom}, Stations to display: ${filteredStations.length}`);
+    
+    // DEBUG: Check coordinate diversity
+    const coords = filteredStations.map(s => `${s.lat.toFixed(4)},${s.lng.toFixed(4)}`);
+    const uniqueCoords = new Set(coords);
+    console.log(`Unique coordinates: ${uniqueCoords.size} out of ${filteredStations.length}`);
+    
+    if (filteredStations.length > 0) {
+      const sampleCoords = filteredStations.slice(0, 10).map((s, i) => 
+        `${i}: (${s.lat.toFixed(4)}, ${s.lng.toFixed(4)}) - ${s.name}`
+      );
+      console.log('First 10 station coordinates:', sampleCoords);
+    }
 
     // Clear existing cluster group
     if (clusterGroupRef.current) {
       mapRef.current.removeLayer(clusterGroupRef.current);
     }
 
-    // Create new cluster group with optimized settings
     const markerClusterGroup = (L as any).markerClusterGroup({
-      maxClusterRadius: 80, // Distance in pixels for clustering
+      maxClusterRadius: zoom < 14 ? 150 : 80,
+      disableClusteringAtZoom: zoom >= 16 ? 16 : null,
       iconCreateFunction: (cluster: any) => {
         const count = cluster.getChildCount();
-        let size = 'small';
-        let radius = 25;
-        let fontSize = 12;
-        
-        if (count > 100) {
-          size = 'large';
-          radius = 35;
-          fontSize = 16;
-        } else if (count > 30) {
-          size = 'medium';
-          radius = 30;
-          fontSize = 14;
-        }
+        const radius = count > 100 ? 35 : count > 30 ? 30 : 25;
+        const fontSize = count > 100 ? 16 : count > 30 ? 14 : 12;
 
         return L.divIcon({
           html: `
@@ -333,14 +368,12 @@ export function MapAnalysis() {
       }
     });
 
-    // Add filtered stations to cluster group
+    // Add individual station markers to cluster group
     filteredStations.forEach((station) => {
-
       const statusColor = getStatusColor(station.status);
       const isGhost = station.isGhost;
       const markerColor = isGhost ? '#9ca3af' : statusColor;
 
-      // Create custom HTML for marker
       const markerHTML = `
         <div style="
           width: 32px;
@@ -418,19 +451,39 @@ export function MapAnalysis() {
         </div>
       `;
 
+      // Debug: Log station coordinates before creating marker
+      if (filteredStations.indexOf(station) < 3 || filteredStations.indexOf(station) % 100 === 0) {
+        console.log(`Adding marker: "${station.name}" at (${station.lat}, ${station.lng})`, {
+          lat: station.lat,
+          lng: station.lng,
+          latType: typeof station.lat,
+          lngType: typeof station.lng,
+        });
+      }
+      
+      // Verify coordinates are valid numbers
+      if (typeof station.lat !== 'number' || typeof station.lng !== 'number') {
+        console.error(`INVALID COORDINATES for station "${station.name}":`, {lat: station.lat, lng: station.lng});
+        return; // Skip invalid markers
+      }
+      
       const marker = L.marker([station.lat, station.lng], { icon })
         .bindPopup(popupContent, { maxWidth: 280 })
         .on('click', () => setSelectedStation(station.id));
 
-      // Add marker to cluster group instead of directly to map
       markerClusterGroup.addLayer(marker);
       markersRef.current[station.id] = marker;
     });
 
-    // Add cluster group to map
     mapRef.current.addLayer(markerClusterGroup);
     clusterGroupRef.current = markerClusterGroup;
-  }, [filteredStations]);
+  };
+
+  // Update markers when filtered stations change or zoom level changes
+  useEffect(() => {
+    if (!mapRef.current) return;
+    updateHierarchicalClusters(mapZoom);
+  }, [filteredStations, mapZoom]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100">

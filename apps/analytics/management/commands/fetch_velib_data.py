@@ -49,9 +49,8 @@ class Command(BaseCommand):
             self.stdout.write("\n  2. Transforming data...")
             cleaner = DataCleaner()
             df_clean = cleaner.clean_station_records(records)
-            
-            transformer = DataTransformer()
-            df_transformed = transformer.transform(df_clean)
+            # Note: DataTransformer only has static methods for aggregation, not needed for raw data loading
+            df_transformed = df_clean
             self.stdout.write(f"  ✓ Transformed {len(df_transformed)} records")
             
             # Load: Store in database
@@ -60,13 +59,13 @@ class Command(BaseCommand):
             station_loader = BikeStationLoader()
             status_loader = StationStatusLoader()
             
-            commune_loader.load_communes(df_transformed)
+            communes_dict = commune_loader.load_communes(df_transformed)
             self.stdout.write("  ✓ Communes synced")
             
-            station_ids = station_loader.load_stations(df_transformed)
+            station_ids = station_loader.load_stations(df_transformed, communes_dict)
             self.stdout.write(f"  ✓ Stations synced ({len(station_ids)} records)")
             
-            status_count = status_loader.load_status(df_transformed, station_ids)
+            status_count = status_loader.load_statuses(df_transformed, station_ids)
             self.stdout.write(f"  ✓ Status snapshots created ({status_count} records)")
             
             self.stdout.write(self.style.SUCCESS('\n✓ Data ingestion completed!'))

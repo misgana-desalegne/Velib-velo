@@ -5,7 +5,8 @@ This service handles complex operations related to communes.
 from django.utils import timezone
 from datetime import timedelta
 from django.db.models import Max, Avg
-from ..models import Commune, BikeStation, StationStatus, DailyAnalytics
+from ..models import Commune, BikeStation, StationStatus, DailyAnalytics, HourlyAnalytics
+from .advanced_analytics_service import AdvancedAnalyticsService
 
 
 class CommuneService:
@@ -88,6 +89,28 @@ class CommuneService:
         if daily_analytics.exists():
             cv_data = daily_analytics.aggregate(Avg('shannon_entropy'))
             avg_cv = round(cv_data['shannon_entropy__avg'] or 0, 2)
+
+        # Fallback: compute CV from recent hourly analytics if daily CV is missing or zero
+        if avg_cv == 0:
+            since = timezone.now() - timedelta(hours=24)
+            hourly_rows = HourlyAnalytics.objects.filter(
+                station__commune=commune,
+                timestamp__gte=since
+            ).values('station_id', 'bikes_available_avg', 'data_points')
+
+            station_series = {}
+            for row in hourly_rows:
+                if row['data_points'] and row['data_points'] > 0:
+                    station_series.setdefault(row['station_id'], []).append(float(row['bikes_available_avg']))
+
+            cv_values = []
+            for series in station_series.values():
+                cv_val = AdvancedAnalyticsService.calculate_coefficient_of_variation(series)
+                if cv_val > 0:
+                    cv_values.append(cv_val)
+
+            if cv_values:
+                avg_cv = round(sum(cv_values) / len(cv_values), 2)
         
         
         return {

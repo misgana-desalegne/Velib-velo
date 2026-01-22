@@ -32,6 +32,17 @@ class BikeStationViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(commune__code=commune_code)
         
         return queryset
+
+    @action(detail=False, methods=['get'])
+    def all(self, request):
+        """
+        Return all stations without pagination.
+
+        GET /api/stations/all/?commune_code=75056
+        """
+        queryset = self.get_queryset()
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
     
     @action(detail=True, methods=['get'])
     def status_history(self, request, pk=None):

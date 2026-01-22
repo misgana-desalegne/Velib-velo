@@ -179,6 +179,45 @@ class StationStatus(models.Model):
         return 0
 
 
+class HourlyAnalytics(models.Model):
+    """Hourly aggregated analytics for stations and communes"""
+    timestamp = models.DateTimeField(help_text="Hour timestamp (rounded down)")
+    date = models.DateField(help_text="Date of the hour")
+    hour = models.IntegerField(help_text="Hour of day (0-23)")
+    
+    # Foreign keys
+    commune = models.ForeignKey(Commune, on_delete=models.CASCADE, related_name='hourly_analytics', null=True, blank=True)
+    station = models.ForeignKey(BikeStation, on_delete=models.CASCADE, related_name='hourly_analytics', null=True, blank=True)
+    
+    # Basic metrics
+    average_utilization = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Average bike utilization %")
+    bikes_available_avg = models.IntegerField(default=0, help_text="Average bikes available")
+    docks_available_avg = models.IntegerField(default=0, help_text="Average docks available")
+    
+    # Signal analysis metrics
+    hourly_delta = models.DecimalField(max_digits=8, decimal_places=2, default=0, help_text="Change in bikes from previous hour")
+    data_points = models.IntegerField(default=0, help_text="Number of status records for this hour")
+    
+    class Meta:
+        ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['-timestamp']),
+            models.Index(fields=['station', '-timestamp']),
+            models.Index(fields=['commune', '-timestamp']),
+            models.Index(fields=['date', 'hour']),
+        ]
+        unique_together = [
+            ['timestamp', 'station'],
+            ['timestamp', 'commune'],
+        ]
+    
+    def __str__(self):
+        if self.station:
+            return f"Hourly analytics for {self.station.stationcode} on {self.timestamp}"
+        elif self.commune:
+            return f"Hourly analytics for {self.commune.code} on {self.timestamp}"
+        return f"Hourly analytics on {self.timestamp}"
+
 
 class DailyAnalytics(models.Model):
     """Aggregated daily analytics with signal analysis metrics"""

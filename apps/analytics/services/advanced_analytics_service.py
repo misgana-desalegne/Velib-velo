@@ -16,7 +16,7 @@ from typing import List, Dict, Tuple
 from django.db.models import F, Q, Avg, Sum, Count, Case, When, DecimalField, IntegerField
 from django.utils import timezone
 
-from apps.analytics.models import BikeStation, StationStatus, DailyAnalytics, Commune
+from apps.analytics.models import BikeStation, StationStatus, DailyAnalytics, HourlyAnalytics, Commune
 
 
 class AdvancedAnalyticsService:
@@ -80,6 +80,64 @@ class AdvancedAnalyticsService:
             })
         
         return deltas
+
+    @staticmethod
+    def calculate_hourly_analytics(station: BikeStation, date: datetime.date) -> List[Dict]:
+        """
+        Aggregate StationStatus into hourly analytics records for a station on a given date.
+
+        Returns list of dicts with HourlyAnalytics fields.
+        """
+        day_start = timezone.make_aware(datetime.combine(date, datetime.min.time()))
+        day_end = timezone.make_aware(datetime.combine(date + timedelta(days=1), datetime.min.time()))
+
+        statuses = StationStatus.objects.filter(
+            station=station,
+            timestamp__gte=day_start,
+            timestamp__lt=day_end
+        ).order_by('timestamp')
+
+        if not statuses.exists():
+            return []
+
+        # Group statuses by hour
+        hourly_buckets: Dict[int, List[StationStatus]] = {}
+        for status in statuses:
+            hour = status.timestamp.hour
+            hourly_buckets.setdefault(hour, []).append(status)
+
+        hourly_records: List[Dict] = []
+        previous_bikes_avg = None
+
+        for hour in sorted(hourly_buckets.keys()):
+            bucket = hourly_buckets[hour]
+            data_points = len(bucket)
+            bikes_avg = sum(s.available_bikes for s in bucket) / data_points
+            docks_avg = sum(s.available_docks for s in bucket) / data_points
+            total_avg = bikes_avg + docks_avg
+
+            utilization_pct = (bikes_avg / total_avg * 100) if total_avg > 0 else 0
+            if previous_bikes_avg is None:
+                delta = 0
+            else:
+                delta = bikes_avg - previous_bikes_avg
+
+            previous_bikes_avg = bikes_avg
+
+            hour_ts = day_start + timedelta(hours=hour)
+
+            hourly_records.append({
+                'timestamp': hour_ts,
+                'date': date,
+                'hour': hour,
+                'average_utilization': Decimal(str(round(utilization_pct, 2))),
+                'bikes_available_avg': int(round(bikes_avg)),
+                'docks_available_avg': int(round(docks_avg)),
+                'hourly_delta': Decimal(str(round(delta, 2))),
+                'data_points': data_points,
+            })
+
+        return hourly_records
     
     @staticmethod
     def calculate_coefficient_of_variation(availability_series: List[float]) -> float:
@@ -185,61 +243,102 @@ class AdvancedAnalyticsService:
         
         Returns dictionary with all metrics for DailyAnalytics creation.
         """
+        hourly_records = HourlyAnalytics.objects.filter(
+            station=station,
+            date=date
+        ).order_by('hour')
+
+        if hourly_records.exists():
+            hourly_list = list(hourly_records)
+            bikes_series = [h.bikes_available_avg for h in hourly_list if h.data_points > 0]
+            if not bikes_series:
+                return None
+
+            cv = AdvancedAnalyticsService.calculate_coefficient_of_variation(bikes_series)
+            deltas = [float(h.hourly_delta) for h in hourly_list]
+            net_flux = sum(deltas)
+            avg_hourly_delta = sum(deltas) / len(deltas) if deltas else 0
+            avg_delta_magnitude = sum(abs(d) for d in deltas) / len(deltas) if deltas else 0
+
+            # Persistence based on hourly averages
+            hours_full = sum(1 for h in hourly_list if h.docks_available_avg == 0 and h.data_points > 0)
+            hours_empty = sum(1 for h in hourly_list if h.bikes_available_avg == 0 and h.data_points > 0)
+
+            # Morning/Evening deltas for profiling
+            morning_deltas = [float(h.hourly_delta) for h in hourly_list if 7 <= h.hour <= 10]
+            evening_deltas = [float(h.hourly_delta) for h in hourly_list if 16 <= h.hour <= 19]
+            delta_morning = sum(morning_deltas) / len(morning_deltas) if morning_deltas else 0
+            delta_evening = sum(evening_deltas) / len(evening_deltas) if evening_deltas else 0
+
+            profile = AdvancedAnalyticsService.profile_station(
+                cv, net_flux, avg_delta_magnitude, delta_morning, delta_evening
+            )
+
+            is_source = net_flux > AdvancedAnalyticsService.NET_FLUX_THRESHOLD
+            is_sink = net_flux < -AdvancedAnalyticsService.NET_FLUX_THRESHOLD
+            is_ghost = profile == 'ghost_station'
+
+            avg_utilization = sum(float(h.average_utilization) for h in hourly_list) / len(hourly_list)
+            peak_hour = max(hourly_list, key=lambda h: h.average_utilization).hour if hourly_list else None
+
+            return {
+                'average_hourly_delta': Decimal(str(round(avg_hourly_delta, 2))),
+                'shannon_entropy': Decimal(str(cv)),
+                'net_flux': Decimal(str(round(net_flux, 2))),
+                'persistence_at_full': hours_full,
+                'persistence_at_empty': hours_empty,
+                'is_source': is_source,
+                'is_sink': is_sink,
+                'is_ghost': is_ghost,
+                'average_utilization': Decimal(str(round(avg_utilization, 2))),
+                'peak_hour': peak_hour,
+            }
+
+        # Fallback to StationStatus if hourly not computed yet
         day_start = timezone.make_aware(datetime.combine(date, datetime.min.time()))
         day_end = timezone.make_aware(datetime.combine(date + timedelta(days=1), datetime.min.time()))
-        
         statuses = StationStatus.objects.filter(
             station=station,
             timestamp__gte=day_start,
             timestamp__lt=day_end
         ).order_by('timestamp')
-        
+
         if not statuses.exists():
             return None
-        
-        # Calculate hourly deltas
+
         deltas = AdvancedAnalyticsService.calculate_hourly_delta(station, date)
-        
         if not deltas:
             return None
-        
-        # Core metrics
-        # Get availability series for CV calculation
+
         availability_series = [s.available_bikes for s in statuses]
         cv = AdvancedAnalyticsService.calculate_coefficient_of_variation(availability_series)
         net_flux = AdvancedAnalyticsService.calculate_net_flux(deltas)
         avg_hourly_delta = sum(d['delta'] for d in deltas) / len(deltas)
         avg_delta_magnitude = sum(abs(d['delta']) for d in deltas) / len(deltas)
-        
-        # Persistence
+
         hours_full, hours_empty = AdvancedAnalyticsService.calculate_persistence(statuses)
-        
-        # Morning/Evening deltas for profiling
+
         morning_deltas = [d['delta'] for d in deltas if 7 <= d['hour'] <= 10]
         evening_deltas = [d['delta'] for d in deltas if 16 <= d['hour'] <= 19]
-        
         delta_morning = sum(morning_deltas) / len(morning_deltas) if morning_deltas else 0
         delta_evening = sum(evening_deltas) / len(evening_deltas) if evening_deltas else 0
-        
-        # Profile classification
+
         profile = AdvancedAnalyticsService.profile_station(
             cv, net_flux, avg_delta_magnitude, delta_morning, delta_evening
         )
-        
-        # Categorization
+
         is_source = net_flux > AdvancedAnalyticsService.NET_FLUX_THRESHOLD
         is_sink = net_flux < -AdvancedAnalyticsService.NET_FLUX_THRESHOLD
         is_ghost = profile == 'ghost_station'
-        
-        # Average utilization
+
         avg_utilization = statuses.aggregate(
             avg=Avg('available_bikes', output_field=DecimalField())
         )['avg'] or 0
-        avg_utilization_pct = (avg_utilization / station.total_docks * 100) if station.total_docks > 0 else 0
-        
+        avg_utilization_pct = (avg_utilization / station.capacity * 100) if station.capacity > 0 else 0
+
         return {
             'average_hourly_delta': Decimal(str(round(avg_hourly_delta, 2))),
-            'shannon_entropy': Decimal(str(cv)),  # Now stores CV instead of entropy
+            'shannon_entropy': Decimal(str(cv)),
             'net_flux': Decimal(str(round(net_flux, 2))),
             'persistence_at_full': hours_full,
             'persistence_at_empty': hours_empty,
@@ -247,7 +346,6 @@ class AdvancedAnalyticsService:
             'is_sink': is_sink,
             'is_ghost': is_ghost,
             'average_utilization': Decimal(str(round(avg_utilization_pct, 2))),
-            'total_trips': len(deltas),  # Number of hourly transitions
         }
     
     @staticmethod
@@ -308,4 +406,75 @@ class AdvancedAnalyticsService:
             ghost_occurrences__gte=5  # Ghost on at least 5 days in the period
         ).order_by('-ghost_occurrences')[:limit]
         
-        return list(ghost_stations)
+        return list(ghost_stations)    
+    @staticmethod
+    def calculate_weekly_analytics(station: BikeStation, week_start_date: datetime.date) -> Dict:
+        """
+        Calculate weekly aggregated analytics from daily records.
+        
+        Args:
+            station: BikeStation instance
+            week_start_date: Monday of the target week
+            
+        Returns:
+            Dictionary with weekly metrics for WeeklyAnalytics creation.
+        """
+        from django.db.models import Avg, Sum, Max, Min
+        
+        # Define week boundaries
+        week_end_date = week_start_date + timedelta(days=6)  # Sunday
+        
+        # Fetch all daily analytics for this station in this week
+        daily_records = DailyAnalytics.objects.filter(
+            station=station,
+            date__gte=week_start_date,
+            date__lte=week_end_date
+        )
+        
+        if not daily_records.exists():
+            return None
+        
+        # Aggregate daily metrics
+        weekly_stats = daily_records.aggregate(
+            avg_utilization=Avg('average_utilization'),
+            avg_hourly_delta=Avg('average_hourly_delta'),
+            total_net_flux=Sum('net_flux'),
+            avg_entropy=Avg('shannon_entropy'),
+            total_hours_full=Sum('persistence_at_full'),
+            total_hours_empty=Sum('persistence_at_empty'),
+            total_days=Count('id'),
+            peak_hour=Avg('peak_hour'),
+            days_source=Count('id', filter=Q(is_source=True)),
+            days_sink=Count('id', filter=Q(is_sink=True)),
+            days_ghost=Count('id', filter=Q(is_ghost=True)),
+        )
+        
+        # Find peak day (day of week with highest traffic)
+        peak_day = None
+        if daily_records.exists():
+            peak_daily = daily_records.annotate(
+                day_of_week=F('date__week_day')
+            ).order_by('-average_hourly_delta').first()
+            peak_day = peak_daily.date.weekday() if peak_daily else None
+        
+        # Determine weekly categorization
+        total_net_flux = float(weekly_stats['total_net_flux'] or 0)
+        is_source = total_net_flux > AdvancedAnalyticsService.NET_FLUX_THRESHOLD * 7  # Scaled for week
+        is_sink = total_net_flux < -AdvancedAnalyticsService.NET_FLUX_THRESHOLD * 7
+        is_ghost = weekly_stats['days_ghost'] >= 4  # Ghost for at least 4 days of the week
+        
+        return {
+            'average_utilization': Decimal(str(round(float(weekly_stats['avg_utilization'] or 0), 2))),
+            'peak_day': peak_day,
+            'peak_hour': int(weekly_stats['peak_hour'] or 0) if weekly_stats['peak_hour'] else None,
+            'average_hourly_delta': Decimal(str(round(float(weekly_stats['avg_hourly_delta'] or 0), 2))),
+            'shannon_entropy': Decimal(str(round(float(weekly_stats['avg_entropy'] or 0), 2))),
+            'net_flux': Decimal(str(round(float(weekly_stats['total_net_flux'] or 0), 2))),
+            'persistence_at_full': weekly_stats['total_hours_full'] or 0,
+            'persistence_at_empty': weekly_stats['total_hours_empty'] or 0,
+            'is_source': is_source,
+            'is_sink': is_sink,
+            'is_ghost': is_ghost,
+            'operational_hours': min(weekly_stats['total_days'] * 24, 168),  # Max 168 hours in a week
+            'maintenance_incidents': 0,  # Would need to track maintenance events separately
+        }

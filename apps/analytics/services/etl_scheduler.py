@@ -41,6 +41,10 @@ def start_etl_scheduler():
     interval_hours = getattr(settings, 'ETL_SCHEDULER_INTERVAL_HOURS', 1)
     etl_limit = getattr(settings, 'ETL_SCHEDULER_RECORD_LIMIT', 10000)
     enabled = getattr(settings, 'ETL_SCHEDULER_ENABLED', True)
+
+    status_enabled = getattr(settings, 'STATION_STATUS_SCHEDULER_ENABLED', True)
+    status_interval_hours = getattr(settings, 'STATION_STATUS_SCHEDULER_INTERVAL_HOURS', 1)
+    status_limit = getattr(settings, 'STATION_STATUS_SCHEDULER_RECORD_LIMIT', 10000)
     
     if not enabled:
         logger.info("ETL Scheduler is disabled in settings")
@@ -48,21 +52,38 @@ def start_etl_scheduler():
     
     try:
         # Add job to run ETL pipeline every N hours
-        scheduler.add_job(
-            func=run_etl_job,
-            trigger=IntervalTrigger(hours=interval_hours),
-            id='etl_pipeline_hourly',
-            name='ETL Pipeline Hourly Run',
-            kwargs={'limit': etl_limit},
-            replace_existing=True,
-            max_instances=1  # Prevent concurrent executions
-        )
+        if enabled:
+            scheduler.add_job(
+                func=run_etl_job,
+                trigger=IntervalTrigger(hours=interval_hours),
+                id='etl_pipeline_hourly',
+                name='ETL Pipeline Hourly Run',
+                kwargs={'limit': etl_limit},
+                replace_existing=True,
+                max_instances=1  # Prevent concurrent executions
+            )
+
+        # Add job to fetch station status snapshots every N hours
+        if status_enabled:
+            scheduler.add_job(
+                func=run_station_status_job,
+                trigger=IntervalTrigger(hours=status_interval_hours),
+                id='station_status_hourly',
+                name='Station Status Hourly Snapshot',
+                kwargs={'limit': status_limit},
+                replace_existing=True,
+                max_instances=1
+            )
         
         # Start the scheduler
         scheduler.start()
         
-        logger.info(f"ETL Scheduler started - runs every {interval_hours} hour(s)")
-        logger.info(f"Record limit per run: {etl_limit}")
+        if enabled:
+            logger.info(f"ETL Scheduler started - runs every {interval_hours} hour(s)")
+            logger.info(f"Record limit per run: {etl_limit}")
+        if status_enabled:
+            logger.info(f"Station status scheduler started - runs every {status_interval_hours} hour(s)")
+            logger.info(f"Status record limit per run: {status_limit}")
         
     except Exception as e:
         logger.error(f"Failed to start ETL Scheduler: {e}")
@@ -99,6 +120,24 @@ def run_etl_job(limit=10000):
         
     except Exception as e:
         logger.error(f"Error during scheduled ETL pipeline run: {e}")
+
+
+def run_station_status_job(limit=10000):
+    """
+    Background job that fetches station status snapshots
+
+    Args:
+        limit: Maximum number of records to extract
+    """
+    try:
+        logger.info(f"Starting scheduled station status snapshot at {datetime.now()}")
+
+        call_command('fetch_velib_data', limit=limit)
+
+        logger.info(f"Scheduled station status snapshot completed at {datetime.now()}")
+
+    except Exception as e:
+        logger.error(f"Error during scheduled station status snapshot: {e}")
 
 
 def get_scheduler_status():

@@ -71,19 +71,6 @@ export function LiveDashboard() {
       const dashboardData = await api.get(url);
       setStats(dashboardData);
       setLastUpdate(new Date());
-
-      // Generate hourly trend data based on available data
-      const baseTotal = (dashboardData.total_bikes || 0) + (dashboardData.total_docks || 0);
-      setHourlyData([
-        { hour: '00:00', bikes: Math.floor(baseTotal * 0.4), docks: Math.floor(baseTotal * 0.6) },
-        { hour: '03:00', bikes: Math.floor(baseTotal * 0.35), docks: Math.floor(baseTotal * 0.65) },
-        { hour: '06:00', bikes: Math.floor(baseTotal * 0.3), docks: Math.floor(baseTotal * 0.7) },
-        { hour: '09:00', bikes: Math.floor(baseTotal * 0.6), docks: Math.floor(baseTotal * 0.4) },
-        { hour: '12:00', bikes: Math.floor(baseTotal * 0.7), docks: Math.floor(baseTotal * 0.3) },
-        { hour: '15:00', bikes: Math.floor(baseTotal * 0.65), docks: Math.floor(baseTotal * 0.35) },
-        { hour: '18:00', bikes: Math.floor(baseTotal * 0.75), docks: Math.floor(baseTotal * 0.25) },
-        { hour: '21:00', bikes: Math.floor(baseTotal * 0.55), docks: Math.floor(baseTotal * 0.45) },
-      ]);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load live data');
       console.error('Error fetching dashboard data:', err);
@@ -93,8 +80,27 @@ export function LiveDashboard() {
     }
   };
 
+  const fetchHourlySummary = async () => {
+    try {
+      const summaryUrl = selectedCommune && selectedCommune !== 'all'
+        ? `${API_ENDPOINTS.hourlyAnalytics}summary/?commune_code=${selectedCommune}&days=1`
+        : `${API_ENDPOINTS.hourlyAnalytics}summary/?days=1`;
+
+      const summary = await api.get(summaryUrl);
+      if (Array.isArray(summary)) {
+        setHourlyData(summary);
+      } else {
+        setHourlyData([]);
+      }
+    } catch (err) {
+      console.error('Error fetching hourly analytics summary:', err);
+      setHourlyData([]);
+    }
+  };
+
   useEffect(() => {
     fetchDashboardData();
+    fetchHourlySummary();
     const interval = setInterval(fetchDashboardData, 30000); // Refresh every 30 seconds
     return () => clearInterval(interval);
   }, [selectedCommune]);
@@ -112,9 +118,10 @@ export function LiveDashboard() {
   useEffect(() => {
     const fetchTopStations = async () => {
       try {
-        const stations = await api.get(`${API_ENDPOINTS.stations}?limit=500`);
-        if (stations && stations.results) {
-          const topStationsList = stations.results
+        const response = await api.get(API_ENDPOINTS.stations);
+        const stations = response.results || response;
+        if (stations && Array.isArray(stations)) {
+          const topStationsList = stations
             .map((s: any) => {
               // Use mechanical + ebike since numbikesavailable is always 0
               const bikes = (s.mechanical || 0) + (s.ebike || 0);
@@ -193,6 +200,11 @@ export function LiveDashboard() {
       return { severity: 'critical', issue: '👻 La station phantom, pas de activity - Comportement Anormal' };
     }
     
+    // CRITICAL: Zero activity (CV = 0, shannon_entropy = 0) - completely stagnant
+    if (cv === 0) {
+      return { severity: 'critical', issue: '🚫 Pas d\'Activité - Station Stagnante (CV=0)' };
+    }
+    
     // CRITICAL: No bikes at all (completely empty)
     if (utilization < 0.01) {
       return { severity: 'critical', issue: '🚨 Aucun Vélo Disponible - Station Vide' };
@@ -243,94 +255,67 @@ export function LiveDashboard() {
   useEffect(() => {
     const fetchCriticalStations = async () => {
       try {
-        // Helper function to fetch all pages of paginated data
-        const fetchAllPages = async (url: string) => {
-          const allResults: any[] = [];
-          let nextUrl: string | null = url;
-          
-          while (nextUrl) {
-            const response = await api.get(nextUrl);
-            if (response && response.results) {
-              allResults.push(...response.results);
-              nextUrl = response.next ? response.next.replace(/^http:\/\/[^/]+/, '') : null;
-            } else {
-              break;
-            }
-          }
-          return allResults;
-        };
+        console.log('🔄 Starting critical stations fetch...');
+        
+        // Fetch stations - just use first page with 50 items (ghost stations should be on first page)
+        console.log('\n🏢 Fetching stations data...');
+        const response = await api.get(API_ENDPOINTS.stations);
+        const allStations = response.results || response || [];
+        console.log(`✅ Stations fetched: ${allStations.length} records`);
+        
+        // Filter stations by profile to find critical ones
+        const criticalStationList = allStations.filter((s: any) => {
+          // Include ghost stations and stations with CV=0 (no variation)
+          return s.profile === 'ghost_station' || s.profile === 'ERREUR' || s.profile === 'ghost';
+        });
 
-        // Fetch ALL analytics data with CV and flux metrics (handle pagination)
-        const allAnalytics = await fetchAllPages(`${API_ENDPOINTS.analytics}?limit=1000`);
-        if (allAnalytics && allAnalytics.length > 0) {
-          const analyticsMap = new Map(
-            allAnalytics.map((a: any) => [a.station, a])
-          );
-          
-          // Fetch all stations to get real-time availability (handle pagination)
-          const allStations = await fetchAllPages(`${API_ENDPOINTS.stations}?limit=1000`);
-          if (allStations && allStations.length > 0) {
-            const allStationData = allStations.map((s: any) => {
-              // Use mechanical + ebike since numbikesavailable is always 0
-              const bikes = (s.mechanical || 0) + (s.ebike || 0);
-              const capacity = s.capacity || 1;
-              const utilization = bikes / capacity;
-              
-              // Get analytics data for this station
-              const analyticsData = analyticsMap.get(s.id) as any;
-              const cv = analyticsData ? (analyticsData.shannon_entropy || 0) : 0;  // CV now stored in shannon_entropy field
-              const flux = analyticsData ? (analyticsData.net_flux || 0) : 0;
-              const isGhost = s.profile === 'ghost_station' || (analyticsData ? analyticsData.is_ghost : false) || false;
-              
-              const { severity, issue } = calculateAlertSeverity(utilization, cv, flux, isGhost);
-              
-              return {
-                name: s.name || s.stationcode || `Station ${s.id}`,
-                commune: s.commune_name || `Zone ${s.id}`,
-                bikes: bikes,
-                docks: capacity - bikes,
-                capacity: capacity,
-                utilization: Math.round(utilization * 100),
-                profile: s.profile,
-                cv: cv,  // Coefficient of Variation (%)
-                flux: flux,
-                severity: severity,
-                issue: issue,
-                isGhost: isGhost,
-              };
-            });
-            
-            // Debug: Log ghost stations count
-            const ghostCount = allStationData.filter((s: any) => s.isGhost).length;
-            const severityCount = allStationData.filter((s: any) => s.severity !== null).length;
-            console.log(`📊 Total stations: ${allStationData.length}, Ghost: ${ghostCount}, With severity: ${severityCount}`);
-            
-            const critical = allStationData
-              // Include all problem stations AND ghost stations in critical alerts
-              .filter((s: any) => s.severity !== null || s.isGhost)
-              .sort((a: any, b: any) => {
-                // Sort by severity: critical > high > warning
-                // Ghost stations are always critical and appear first
-                const severityOrder = { critical: 0, high: 1, warning: 2 };
-                const aSeverity = a.severity || (a.isGhost ? 'critical' : null);
-                const bSeverity = b.severity || (b.isGhost ? 'critical' : null);
-                const aOrder = severityOrder[aSeverity as keyof typeof severityOrder] ?? 999;
-                const bOrder = severityOrder[bSeverity as keyof typeof severityOrder] ?? 999;
-                // If same severity, ghost stations come first
-                if (aOrder === bOrder) {
-                  return (b.isGhost ? 1 : 0) - (a.isGhost ? 1 : 0);
-                }
-                return aOrder - bOrder;
-              });
-            
-            console.log(`🚨 Critical alerts to display: ${critical.length}`);
-            if (critical.length > 0) {
-              console.log('First 3 critical:', critical.slice(0, 3).map(c => ({ name: c.name, severity: c.severity, isGhost: c.isGhost })));
-            }
-            
-            setCriticalStations(critical);
-          }
+        const stationIds = criticalStationList.map((s: any) => s.id).join(',');
+        const dailyAnalyticsMap = new Map<number, any>();
+        const weeklyAnalyticsMap = new Map<number, any>();
+
+        if (stationIds) {
+          const dailyUrl = `${API_ENDPOINTS.analytics}?days=1&station_ids=${stationIds}`;
+          const dailyResponse = await api.get(dailyUrl);
+          const dailyResults = dailyResponse.results || dailyResponse || [];
+          dailyResults.forEach((a: any) => dailyAnalyticsMap.set(a.station, a));
+
+          const weeklyUrl = `${API_ENDPOINTS.weeklyAnalytics}?weeks=1&station_ids=${stationIds}`;
+          const weeklyResponse = await api.get(weeklyUrl);
+          const weeklyResults = weeklyResponse.results || weeklyResponse || [];
+          weeklyResults.forEach((a: any) => weeklyAnalyticsMap.set(a.station, a));
         }
+
+        const criticalStations = criticalStationList.map((s: any) => {
+          // Transform raw station data to match component expectations
+          const bikes = (s.mechanical || 0) + (s.ebike || 0);
+          const capacity = s.capacity || 1;
+          const utilization = (bikes / capacity) * 100;
+
+          const daily = dailyAnalyticsMap.get(s.id);
+          const weekly = weeklyAnalyticsMap.get(s.id);
+
+          return {
+            id: s.id,
+            name: s.name || s.stationcode || `Station ${s.id}`,
+            commune: s.commune_name || `Zone ${s.id}`,
+            bikes: bikes,
+            docks: capacity - bikes,
+            capacity: capacity,
+            utilization: Math.round(utilization),
+            profile: s.profile,
+            cv: daily ? Number(daily.shannon_entropy || 0) : 0,
+            flux: daily ? Number(daily.net_flux || 0) : 0,
+            weeklyFlux: weekly ? Number(weekly.net_flux || 0) : 0,
+            severity: 'critical',
+            isGhost: s.profile === 'ghost_station' || s.profile === 'ghost',
+            issue: s.profile === 'ghost_station' || s.profile === 'ghost' ? '👻 Ghost Station' : 'Station Error',
+          };
+        });
+        
+        console.log(`🔍 Critical stations found (by profile): ${criticalStations.length}`);
+        console.log('Critical stations (transformed):', criticalStations.slice(0, 3));
+        
+        setCriticalStations(criticalStations);
       } catch (err) {
         console.error('Error fetching critical stations:', err);
       }
@@ -653,11 +638,12 @@ export function LiveDashboard() {
                         station.isGhost ? 'text-purple-700' : station.severity === 'critical' ? 'text-red-700' : station.severity === 'high' ? 'text-orange-700' : 'text-yellow-700'
                       }`}>{station.issue}</p>
                       <div className="flex items-center gap-2 mt-2 flex-wrap">
-                        <span className="text-xs bg-white/50 px-2 py-1 rounded font-medium">🚲 {station.bikes}</span>
-                        <span className="text-xs bg-white/50 px-2 py-1 rounded font-medium">📍 {station.docks}</span>
-                        <span className="text-xs bg-white/50 px-2 py-1 rounded font-bold">{station.utilization}%</span>
-                        {station.cv > 0 && <span className="text-xs bg-white/50 px-2 py-1 rounded font-medium">📊 CV: {station.cv.toFixed(1)}%</span>}
-                        {station.flux !== 0 && <span className="text-xs bg-white/50 px-2 py-1 rounded font-medium">⚡ {station.flux > 0 ? '+' : ''}{station.flux.toFixed(1)} v/h</span>}
+                        <span className="text-xs bg-white/50 px-2 py-1 rounded font-medium">🚲 {station.bikes || 0}</span>
+                        <span className="text-xs bg-white/50 px-2 py-1 rounded font-medium">📍 {station.docks || 0}</span>
+                        <span className="text-xs bg-white/50 px-2 py-1 rounded font-bold">{station.utilization || 0}%</span>
+                        {station.cv !== undefined && station.cv > 0 && <span className="text-xs bg-white/50 px-2 py-1 rounded font-medium">📊 CV: {station.cv.toFixed(1)}%</span>}
+                        {station.flux !== undefined && station.flux !== 0 && <span className="text-xs bg-white/50 px-2 py-1 rounded font-medium">⚡ {station.flux > 0 ? '+' : ''}{station.flux.toFixed(1)} v/h</span>}
+                        {station.weeklyFlux !== undefined && station.weeklyFlux !== 0 && <span className="text-xs bg-white/50 px-2 py-1 rounded font-medium">🗓️ {station.weeklyFlux > 0 ? '+' : ''}{station.weeklyFlux.toFixed(1)} v/sem</span>}
                       </div>
                     </div>
                   </div>

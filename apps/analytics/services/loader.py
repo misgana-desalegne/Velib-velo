@@ -13,7 +13,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.analytics.models import (
-    Commune, BikeStation, StationStatus, DailyAnalytics, WeeklyAnalytics
+    Commune, BikeStation, StationStatus, DailyAnalytics, WeeklyAnalytics, HourlyAnalytics
 )
 
 logger = logging.getLogger(__name__)
@@ -464,6 +464,94 @@ class DailyAnalyticsLoader:
         return count
 
 
+class HourlyAnalyticsLoader:
+    """Load hourly aggregated analytics into database"""
+
+    @staticmethod
+    @transaction.atomic
+    def load_hourly_analytics(df: pd.DataFrame, communes_dict: Dict[str, int],
+                              stations_dict: Dict[str, int],
+                              timestamp_col: str = 'hour_ts',
+                              date_col: str = 'date',
+                              hour_col: str = 'hour',
+                              station_id_col: str = 'station_id',
+                              commune_code_col: str = 'commune_code',
+                              utilization_col: str = 'avg_utilization',
+                              bikes_col: str = 'avg_numbikesavailable',
+                              docks_col: str = 'avg_numdocksavailable',
+                              delta_col: str = 'hourly_delta',
+                              data_points_col: str = 'data_points',
+                              batch_size: int = 1000) -> int:
+        """
+        Load hourly analytics into database
+
+        Args:
+            df: DataFrame with hourly aggregated data
+            communes_dict: Dictionary mapping commune codes to IDs
+            stations_dict: Dictionary mapping station IDs to model IDs
+        """
+        analytics_records = []
+        count = 0
+
+        has_commune_col = commune_code_col in df.columns
+
+        for _, row in df.iterrows():
+            try:
+                ts = pd.to_datetime(row[timestamp_col]) if pd.notna(row.get(timestamp_col)) else None
+                if ts is None:
+                    continue
+
+                date_val = pd.to_datetime(row[date_col]).date() if pd.notna(row.get(date_col)) else ts.date()
+                hour_val = int(row[hour_col]) if pd.notna(row.get(hour_col)) else ts.hour
+
+                station_id = str(row[station_id_col]).strip() if pd.notna(row.get(station_id_col)) else None
+                station_pk = stations_dict.get(station_id) if station_id else None
+
+                commune_pk = None
+                if has_commune_col:
+                    commune_code = str(row[commune_code_col]).strip() if pd.notna(row.get(commune_code_col)) else None
+                    commune_pk = communes_dict.get(commune_code) if commune_code else None
+
+                if not station_pk:
+                    continue
+
+                avg_util = float(row[utilization_col]) if pd.notna(row.get(utilization_col)) else 0
+                bikes_avg = int(round(float(row[bikes_col]))) if pd.notna(row.get(bikes_col)) else 0
+                docks_avg = int(round(float(row[docks_col]))) if pd.notna(row.get(docks_col)) else 0
+                delta = float(row[delta_col]) if pd.notna(row.get(delta_col)) else 0
+                data_points = int(row[data_points_col]) if data_points_col in df.columns and pd.notna(row.get(data_points_col)) else 1
+
+                analytics = HourlyAnalytics(
+                    timestamp=ts,
+                    date=date_val,
+                    hour=hour_val,
+                    station_id=station_pk,
+                    commune_id=commune_pk,
+                    average_utilization=Decimal(str(avg_util)),
+                    bikes_available_avg=bikes_avg,
+                    docks_available_avg=docks_avg,
+                    hourly_delta=Decimal(str(round(delta, 2))),
+                    data_points=data_points,
+                )
+                analytics_records.append(analytics)
+                count += 1
+
+                if len(analytics_records) >= batch_size:
+                    HourlyAnalytics.objects.bulk_create(analytics_records, ignore_conflicts=True)
+                    logger.info(f"Inserted {len(analytics_records)} hourly analytics records")
+                    analytics_records = []
+
+            except Exception as e:
+                logger.error(f"Error processing hourly analytics for {row.get(timestamp_col)}: {e}")
+
+        if analytics_records:
+            HourlyAnalytics.objects.bulk_create(analytics_records, ignore_conflicts=True)
+            logger.info(f"Inserted {len(analytics_records)} hourly analytics records")
+
+        logger.info(f"Total hourly analytics records loaded: {count}")
+        return count
+
+
 class WeeklyAnalyticsLoader:
     """Load weekly aggregated analytics into database"""
     
@@ -566,6 +654,7 @@ class DataLoader:
         self.commune_loader = CommuneLoader()
         self.station_loader = BikeStationLoader()
         self.status_loader = StationStatusLoader()
+        self.hourly_loader = HourlyAnalyticsLoader()
         self.daily_loader = DailyAnalyticsLoader()
         self.weekly_loader = WeeklyAnalyticsLoader()
     
@@ -586,6 +675,7 @@ class DataLoader:
             'communes': 0,
             'stations': 0,
             'statuses': 0,
+            'hourly_analytics': 0,
             'daily_analytics': 0,
             'weekly_analytics': 0,
             'errors': []
@@ -612,6 +702,16 @@ class DataLoader:
             
             # Load station statuses
             result['statuses'] = self.status_loader.load_statuses(df_raw, stations_dict)
+
+            # Load hourly analytics
+            if 'hourly' in transformed_data:
+                result['hourly_analytics'] = self.hourly_loader.load_hourly_analytics(
+                    transformed_data['hourly'],
+                    communes_dict,
+                    stations_dict,
+                    station_id_col='stationcode',
+                    commune_code_col='code_insee_commune'
+                )
             
             # Load daily analytics
             if 'daily' in transformed_data:
