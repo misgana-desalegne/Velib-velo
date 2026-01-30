@@ -57,10 +57,47 @@ class DailyAnalyticsManager(models.Manager):
     def for_commune(self, commune):
         """Get analytics for a specific commune"""
         return self.filter(commune=commune)
+
+# Contact message model for 'Nous Contactons' form
+from django.contrib.auth import get_user_model
+
+class ContactMessage(models.Model):
+    user = models.ForeignKey(get_user_model(), on_delete=models.SET_NULL, null=True, blank=True)
+    name = models.CharField(max_length=100)
+    email = models.EmailField()
+    phone = models.CharField(max_length=30, blank=True)
+    message = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.name} ({self.email}) - {self.created_at:%Y-%m-%d %H:%M}"
     
     def for_station(self, station):
         """Get analytics for a specific station"""
         return self.filter(station=station)
+
+
+import uuid
+
+
+class TeamMember(models.Model):
+    """Team members for the public Teams view. Stored in DB so content can be managed by admin."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=200)
+    role = models.CharField(max_length=200, blank=True)
+    image_url = models.TextField(blank=True, null=True, help_text='URL or data URL for the avatar')
+    github_url = models.CharField(max_length=500, blank=True, null=True)
+    linkedin_url = models.CharField(max_length=500, blank=True, null=True)
+    email = models.EmailField(blank=True, null=True)
+    website_url = models.CharField(max_length=500, blank=True, null=True)
+    cv_url = models.CharField(max_length=1000, blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.name} ({self.role})"
 
 
 class WeeklyAnalyticsManager(models.Manager):

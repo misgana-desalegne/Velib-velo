@@ -1,5 +1,15 @@
 from rest_framework import serializers
-from .models import Commune, BikeStation, StationStatus, DailyAnalytics, HourlyAnalytics, WeeklyAnalytics
+from .models import Commune, BikeStation, StationStatus, DailyAnalytics, HourlyAnalytics, WeeklyAnalytics, ContactMessage, TeamMember
+class ContactMessageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ContactMessage
+        fields = ['id', 'user', 'name', 'email', 'phone', 'message', 'created_at']
+
+
+class TeamMemberSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TeamMember
+        fields = ['id', 'name', 'role', 'image_url', 'github_url', 'linkedin_url', 'email', 'website_url', 'cv_url', 'created_at']
 
 
 class CommuneSerializer(serializers.ModelSerializer):

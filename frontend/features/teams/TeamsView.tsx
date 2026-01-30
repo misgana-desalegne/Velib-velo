@@ -1,7 +1,8 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { Github, Globe, Linkedin, Mail, Pencil, Trash2, Plus, Save, X, AlertCircle, FileText } from 'lucide-react';
 
 import type { AppPage } from '../../shared/types/navigation';
+import { API_ENDPOINTS } from '../../api/config';
 import gretaLogo from '../../assets/images/Logo-Greta.png';
 import kirosImage from '../../assets/images/img/clients/kiros.JPG';
 import ruaImage from '../../assets/images/img/clients/rua.jpg';
@@ -28,6 +29,8 @@ const defaultMembers: TeamMember[] = [
     name: 'Kiros',
     role: 'Data Scientist',
     imageUrl: kirosImage,
+    githubUrl: 'https://github.com/misgana-desalegne',
+    linkedinUrl: 'https://www.linkedin.com/in/misgana-desalegne/',
     websiteUrl: 'https://www.kirosit.fr/portfolio',
   },
   {
@@ -43,6 +46,7 @@ const defaultMembers: TeamMember[] = [
     name: 'Farial',
     role: 'Professional Prompter',
     imageUrl: farialImage,
+    githubUrl: 'https://github.com/farialhuda-Bapon'
   },
   {
     id: 'greta',
@@ -66,6 +70,41 @@ function loadMembers(): TeamMember[] {
 
 function saveMembers(members: TeamMember[]) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(members));
+}
+
+// Fetch members from backend on mount; fall back to localStorage if unavailable
+
+function toApiPayload(d: TeamMember) {
+  return {
+    name: d.name,
+    role: d.role ?? '',
+    image_url: d.imageUrl ?? null,
+    github_url: d.githubUrl ?? null,
+    linkedin_url: d.linkedinUrl ?? null,
+    email: d.email ?? null,
+    website_url: d.websiteUrl ?? null,
+    cv_url: d.cvUrl ?? null,
+  };
+}
+
+function fromApiMember(api: any): TeamMember {
+  return {
+    id: String(api.id),
+    name: api.name || '',
+    role: api.role || '',
+    imageUrl: api.image_url || undefined,
+    githubUrl: api.github_url || undefined,
+    linkedinUrl: api.linkedin_url || undefined,
+    email: api.email || undefined,
+    websiteUrl: api.website_url || undefined,
+    cvUrl: api.cv_url || undefined,
+  };
+}
+
+function isUuid(id?: string) {
+  if (!id) return false;
+  // simple hyphenated UUID v4-ish check
+  return /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(id);
 }
 
 function initials(name: string): string {
@@ -109,6 +148,26 @@ export function TeamsView({
     [editingId, members]
   );
 
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+          const res = await fetch(API_ENDPOINTS.teamMembers || '/api/team-members/');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (cancelled) return;
+        if (Array.isArray(data)) {
+          const mapped = data.map(fromApiMember);
+          setMembers(mapped);
+          saveMembers(mapped);
+        }
+      } catch (e) {
+        // ignore, keep local
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   const startEdit = (member: TeamMember) => {
     setEditingId(member.id);
     setDraft({ ...member });
@@ -133,25 +192,77 @@ export function TeamsView({
     setIsAdding(false);
   };
 
-  const commitEdit = () => {
+  const commitEdit = async () => {
     if (!draft || !draft.name?.trim()) return;
 
-    if (isAdding) {
-      // Add new member
-      const newMembers = [...members, draft];
-      setMembers(newMembers);
-      saveMembers(newMembers);
-    } else {
-      // Update existing member
-      const updated = members.map(m => (m.id === draft.id ? { ...draft } : m));
-      setMembers(updated);
-      saveMembers(updated);
+    try {
+      if (isAdding) {
+        // Try to persist to backend
+        const res = await fetch(API_ENDPOINTS.teamMembers || '/api/team-members/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(toApiPayload(draft)),
+        });
+        if (res.ok) {
+          const created = await res.json();
+          const createdMember = fromApiMember(created);
+          const newMembers = [...members, createdMember];
+          setMembers(newMembers);
+          saveMembers(newMembers);
+        } else {
+          const newMembers = [...members, draft];
+          setMembers(newMembers);
+          saveMembers(newMembers);
+        }
+        } else {
+        // Update
+        if (draft.id && isUuid(draft.id)) {
+          const res = await fetch(`${(API_ENDPOINTS.teamMembers || '/api/team-members/').replace(/\/$/, '')}/${draft.id}/`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(toApiPayload(draft)),
+          });
+          if (res.ok) {
+            const updatedApi = await res.json();
+            const updatedMember = fromApiMember(updatedApi);
+            const updated = members.map(m => (m.id === updatedMember.id ? updatedMember : m));
+            setMembers(updated);
+            saveMembers(updated);
+          } else {
+            const updated = members.map(m => (m.id === draft.id ? { ...draft } : m));
+            setMembers(updated);
+            saveMembers(updated);
+          }
+        } else {
+          const updated = members.map(m => (m.id === draft.id ? { ...draft } : m));
+          setMembers(updated);
+          saveMembers(updated);
+        }
+      }
+    } catch (err) {
+      // fallback to local change
+      if (isAdding) {
+        const newMembers = [...members, draft];
+        setMembers(newMembers);
+        saveMembers(newMembers);
+      } else {
+        const updated = members.map(m => (m.id === draft.id ? { ...draft } : m));
+        setMembers(updated);
+        saveMembers(updated);
+      }
     }
 
     cancelEdit();
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
+    try {
+      if (isUuid(id)) {
+        await fetch(`${(API_ENDPOINTS.teamMembers || '/api/team-members/').replace(/\/$/, '')}/${id}/`, { method: 'DELETE' });
+      }
+    } catch (e) {
+      // ignore
+    }
     const updated = members.filter(m => m.id !== id);
     setMembers(updated);
     saveMembers(updated);
@@ -343,11 +454,7 @@ export function TeamsView({
       </div>
 
       {/* Info Footer */}
-      {isAuthenticated && (
-        <div className={styles.infoFooter}>
-          <p>Les modifications sont sauvegardées automatiquement dans votre navigateur (localStorage).</p>
-        </div>
-      )}
+   
 
       {/* Edit Modal */}
       {isAuthenticated && editingId && draft && (

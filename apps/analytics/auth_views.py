@@ -6,7 +6,19 @@ from django.contrib.auth.models import User
 from django.contrib.auth import authenticate
 from rest_framework_simplejwt.tokens import RefreshToken
 from .auth_serializers import RegisterSerializer, UserSerializer
+from .serializers import ContactMessageSerializer
+from .models import ContactMessage
+from rest_framework import permissions
 
+# ContactMessage API view
+class ContactMessageView(generics.ListCreateAPIView):
+    queryset = ContactMessage.objects.all().order_by('-created_at')
+    serializer_class = ContactMessageSerializer
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+
+    def perform_create(self, serializer):
+        user = self.request.user if self.request.user.is_authenticated else None
+        serializer.save(user=user)
 
 class RegisterView(generics.CreateAPIView):
     queryset = User.objects.all()

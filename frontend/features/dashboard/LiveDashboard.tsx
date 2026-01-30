@@ -7,6 +7,7 @@ import { Bike, MapPin, AlertCircle, TrendingUp, RefreshCw, Activity, Zap, Menu, 
 import { LineChart, Line, AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { Progress } from '../../shared/ui/progress';
 import { api, API_ENDPOINTS } from '../../api/config';
+import LoadingSpinner from '../../shared/components/LoadingSpinner';
 
 interface LiveDashboardStats {
   total_stations?: number;
@@ -367,10 +368,7 @@ export function LiveDashboard() {
   if (loading) {
     return (
       <div className="p-8 bg-gradient-to-br from-gray-50 to-gray-100 min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600 font-medium">Chargement des données en direct...</p>
-        </div>
+        <LoadingSpinner size={64} message="Chargement des données en direct..." />
       </div>
     );
   }
