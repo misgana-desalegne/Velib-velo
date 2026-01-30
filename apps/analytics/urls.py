@@ -5,7 +5,8 @@ from .views import (
     DailyAnalyticsViewSet, HourlyAnalyticsViewSet, WeeklyAnalyticsViewSet, AnalyticsViewSet, StationProfileViewSet,
     live_dashboard, commune_summary, commune_list
 )
-from .auth_views import RegisterView, LoginView, LogoutView, CurrentUserView
+from .auth_views import RegisterView, LoginView, LogoutView, CurrentUserView, ContactMessageView
+from .api_views import TeamMemberListCreateView, TeamMemberDetailView
 
 router = DefaultRouter()
 router.register(r'communes', CommuneViewSet)
@@ -28,4 +29,10 @@ urlpatterns = [
     path('auth/login/', LoginView.as_view(), name='auth-login'),
     path('auth/logout/', LogoutView.as_view(), name='auth-logout'),
     path('auth/user/', CurrentUserView.as_view(), name='current-user'),
+
+    # Contact messages
+    path('contact-messages/', ContactMessageView.as_view(), name='contact-messages'),
+    # Team members API
+    path('team-members/', TeamMemberListCreateView.as_view(), name='team-members-list'),
+    path('team-members/<uuid:pk>/', TeamMemberDetailView.as_view(), name='team-members-detail'),
 ]

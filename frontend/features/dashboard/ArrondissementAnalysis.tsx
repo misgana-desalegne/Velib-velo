@@ -5,6 +5,7 @@ import { Building2, Bike, TrendingUp, MapPin, AlertCircle, Zap, Brain, X, Sparkl
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { api, API_ENDPOINTS } from '../../api/config';
 import { generateCommuneAnalysisPrompt, getExplanationWithCache } from '../../api/gemini';
+import LoadingSpinner from '../../shared/components/LoadingSpinner';
 
 interface CommuneData {
   code: string;
@@ -93,14 +94,11 @@ export function ArrondissementAnalysis() {
 
   if (loading) {
     return (
-      <div className="p-8">
-        <div className="text-center">
-          <p className="text-gray-600">Loading commune data...</p>
-        </div>
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <LoadingSpinner size={64} message="Chargement des communes..." />
       </div>
     );
   }
-
   if (error) {
     return (
       <div className="p-8">

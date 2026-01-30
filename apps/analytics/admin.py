@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Commune, BikeStation, StationStatus, DailyAnalytics, WeeklyAnalytics
+from .models import Commune, BikeStation, StationStatus, DailyAnalytics, WeeklyAnalytics, ContactMessage, TeamMember
 
 
 @admin.register(Commune)
@@ -56,3 +56,17 @@ class WeeklyAnalyticsAdmin(admin.ModelAdmin):
             'fields': ('operational_hours', 'maintenance_incidents')
         }),
     )
+
+
+@admin.register(ContactMessage)
+class ContactMessageAdmin(admin.ModelAdmin):
+    list_display = ['id', 'name', 'email', 'phone', 'created_at', 'user']
+    search_fields = ['name', 'email', 'message']
+    readonly_fields = ['created_at']
+
+
+@admin.register(TeamMember)
+class TeamMemberAdmin(admin.ModelAdmin):
+    list_display = ['id', 'name', 'role', 'email', 'created_at']
+    search_fields = ['name', 'role', 'email']
+    readonly_fields = ['created_at']

@@ -32,6 +32,8 @@ export const API_ENDPOINTS = {
   hourlyAnalytics: `${API_BASE_URL}/hourly-analytics/`,
   weeklyAnalytics: `${API_BASE_URL}/weekly-analytics/`,
   advancedAnalytics: `${API_BASE_URL}/advanced-analytics/`,
+  // Team members
+  teamMembers: `${API_BASE_URL}/team-members/`,
 };
 
 // Generic API helper functions

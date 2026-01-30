@@ -5,6 +5,60 @@ import logo from '@/assets/images/img/logo/LOGO velo.png';
 import '../styles/responsive.css';
 import type { AppPage } from '../types/navigation';
 
+// Contact modal component
+function ContactModal({ open, onClose, onSubmit }: { open: boolean; onClose: () => void; onSubmit?: () => void }) {
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [message, setMessage] = useState('');
+  const [status, setStatus] = useState('');
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setStatus('');
+    try {
+      const res = await fetch('/api/contact-messages/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(localStorage.getItem('access_token') ? { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` } : {})
+        },
+        body: JSON.stringify({ name, email, phone, message })
+      });
+      if (res.ok) {
+        setStatus('Message envoyé!');
+        setName(''); setEmail(''); setPhone(''); setMessage('');
+        if (onSubmit) onSubmit();
+      } else {
+        setStatus('Erreur lors de l\'envoi.');
+      }
+    } catch {
+      setStatus('Erreur réseau.');
+    }
+  };
+
+  if (!open) return null;
+  return (
+    <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.35)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+      <div style={{ background: 'white', borderRadius: 16, padding: 32, width: 'min(92vw, 760px)', maxWidth: 900, boxShadow: '0 12px 48px rgba(0,0,0,0.18)', maxHeight: '90vh', overflowY: 'auto' }}>
+        <h2 style={{ fontWeight: 700, fontSize: '1.5rem', marginBottom: 12 }}>Nous Contactons</h2>
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <input required placeholder="Nom" value={name} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setName(e.target.value)} style={{ padding: 10, borderRadius: 8, border: '1px solid #ccc' }} />
+          <input required type="email" placeholder="Email" value={email} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)} style={{ padding: 10, borderRadius: 8, border: '1px solid #ccc' }} />
+          <input placeholder="Téléphone" value={phone} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPhone(e.target.value)} style={{ padding: 10, borderRadius: 8, border: '1px solid #ccc' }} />
+          <textarea required placeholder="Votre message" value={message} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setMessage(e.target.value)} style={{ padding: 12, borderRadius: 8, border: '1px solid #ccc', minHeight: 200, resize: 'vertical' }} />
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+            <button type="button" onClick={onClose} style={{ background: '#eee', border: 'none', borderRadius: 8, padding: '8px 16px', cursor: 'pointer' }}>Annuler</button>
+            <button type="submit" style={{ background: '#2F80ED', color: 'white', border: 'none', borderRadius: 8, padding: '8px 16px', cursor: 'pointer' }}>Envoyer</button>
+          </div>
+          {status && <div style={{ color: status.includes('Erreur') ? 'red' : 'green', marginTop: 8 }}>{status}</div>}
+        </form>
+      </div>
+    </div>
+  );
+}
+// ...existing code...
+
 // Dashboard Header Props
 interface DashboardHeaderProps {
   variant: 'dashboard';
@@ -25,6 +79,8 @@ type HeaderProps = DashboardHeaderProps | LandingHeaderProps;
 
 export function Header(props: HeaderProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  // Contact modal state (moved up so both header variants can use it)
+  const [contactOpen, setContactOpen] = useState(false);
 
   const toggleMenu = () => {
     setIsMenuOpen(!isMenuOpen);
@@ -81,6 +137,24 @@ export function Header(props: HeaderProps) {
                 </Button>
               );
             })}
+
+                    {/* Contact Modal placeholder removed (rendered once below) */}
+          {/* Mobile Menu Button */}
+          <button 
+            onClick={toggleMenu}
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              padding: '8px',
+              color: '#333',
+              marginLeft: 'auto'
+            }}
+            className="md:hidden"
+          >
+            {isMenuOpen ? <X size={28} /> : <Menu size={28} />}
+          </button>
+            
           </nav>
 
           {/* Status Indicator and Logout - Desktop */}
@@ -90,6 +164,15 @@ export function Header(props: HeaderProps) {
               <span className="text-sm text-gray-600">En Direct</span>
             </div>
             
+            {/* Nous Contactons button - visible on desktop when authenticated */}
+            <button
+              onClick={() => setContactOpen(true)}
+              className="hidden md:inline-flex"
+              style={{ background: 'none', border: 'none', color: '#2F80ED', fontWeight: 600, cursor: 'pointer' }}
+            >
+              contactez-nous
+            </button>
+
             {onLogout && (
               <Button
                 variant="outline"
@@ -145,6 +228,13 @@ export function Header(props: HeaderProps) {
                 <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
                 <span className="text-sm text-gray-600">En Direct</span>
               </div>
+              <button
+                onClick={() => { setContactOpen(true); setIsMenuOpen(false); }}
+                className="flex items-center gap-3 px-4 py-3 text-blue-600 hover:bg-blue-50 w-full text-left"
+                style={{ background: 'none', border: 'none' }}
+              >
+                contactez-nous
+              </button>
               {onLogout && (
                 <button
                   onClick={() => {
@@ -160,6 +250,8 @@ export function Header(props: HeaderProps) {
             </nav>
           </div>
         )}
+        {/* Contact Modal (rendered for dashboard too) */}
+        <ContactModal open={contactOpen} onClose={() => setContactOpen(false)} onSubmit={() => setContactOpen(false)} />
       </header>
     );
   }
@@ -177,6 +269,7 @@ export function Header(props: HeaderProps) {
     onLogout();
   };
 
+  // Contact modal state (declared above)
   return (
     <header style={{
       backgroundColor: 'white',
@@ -233,8 +326,8 @@ export function Header(props: HeaderProps) {
                 cursor: 'pointer',
                 transition: 'color 0.3s'
               }}
-              onMouseOver={(e) => e.currentTarget.style.color = '#0055a4'}
-              onMouseOut={(e) => e.currentTarget.style.color = '#333'}
+              onMouseOver={(e: React.MouseEvent<HTMLButtonElement>) => e.currentTarget.style.color = '#0055a4'}
+              onMouseOut={(e: React.MouseEvent<HTMLButtonElement>) => e.currentTarget.style.color = '#333'}
             >
               Accueil
             </button>
@@ -252,31 +345,52 @@ export function Header(props: HeaderProps) {
                 cursor: 'pointer',
                 transition: 'color 0.3s'
               }}
-              onMouseOver={(e) => e.currentTarget.style.color = '#0055a4'}
-              onMouseOut={(e) => e.currentTarget.style.color = '#333'}
+              onMouseOver={(e: React.MouseEvent<HTMLButtonElement>) => e.currentTarget.style.color = '#0055a4'}
+              onMouseOut={(e: React.MouseEvent<HTMLButtonElement>) => e.currentTarget.style.color = '#333'}
             >
               Équipe
             </button>
             
             {isAuthenticated && (
-              <button 
-                onClick={() => onNavigate('dashboard')}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: '#333',
-                  fontFamily: 'Arial, sans-serif',
-                  fontSize: '1rem',
-                  fontWeight: '500',
-                  padding: '8px 10px',
-                  cursor: 'pointer',
-                  transition: 'color 0.3s'
-                }}
-                onMouseOver={(e) => e.currentTarget.style.color = '#0055a4'}
-                onMouseOut={(e) => e.currentTarget.style.color = '#333'}
-              >
-                Tableau de bord
-              </button>
+              <>
+                <button 
+                  onClick={() => onNavigate('dashboard')}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#333',
+                    fontFamily: 'Arial, sans-serif',
+                    fontSize: '1rem',
+                    fontWeight: '500',
+                    padding: '8px 10px',
+                    cursor: 'pointer',
+                    transition: 'color 0.3s'
+                  }}
+                  onMouseOver={(e: React.MouseEvent<HTMLButtonElement>) => e.currentTarget.style.color = '#0055a4'}
+                  onMouseOut={(e: React.MouseEvent<HTMLButtonElement>) => e.currentTarget.style.color = '#333'}
+                >
+                  Tableau de bord
+                </button>
+                <button
+                  onClick={() => setContactOpen(true)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#2F80ED',
+                    fontFamily: 'Arial, sans-serif',
+                    fontSize: '1rem',
+                    fontWeight: '500',
+                    padding: '8px 10px',
+                    cursor: 'pointer',
+                    transition: 'color 0.3s',
+                    textDecoration: 'underline'
+                  }}
+                  onMouseOver={(e: React.MouseEvent<HTMLButtonElement>) => e.currentTarget.style.color = '#0055a4'}
+                  onMouseOut={(e: React.MouseEvent<HTMLButtonElement>) => e.currentTarget.style.color = '#2F80ED'}
+                >
+                  Nous Contactons
+                </button>
+              </>
             )}
             
             {!isAuthenticated ? (
@@ -298,11 +412,11 @@ export function Header(props: HeaderProps) {
                     lineHeight: '1',
                     boxShadow: 'none'
                   }}
-                  onMouseOver={(e) => {
+                  onMouseOver={(e: React.MouseEvent<HTMLButtonElement>) => {
                     e.currentTarget.style.backgroundColor = '#e6f0f7';
                     e.currentTarget.style.boxShadow = '0 4px 10px rgba(0, 85, 164, 0.2)';
                   }}
-                  onMouseOut={(e) => {
+                  onMouseOut={(e: React.MouseEvent<HTMLButtonElement>) => {
                     e.currentTarget.style.backgroundColor = '#fff';
                     e.currentTarget.style.boxShadow = 'none';
                   }}
@@ -325,11 +439,11 @@ export function Header(props: HeaderProps) {
                     fontSize: '14px',
                     lineHeight: '1'
                   }}
-                  onMouseOver={(e) => {
+                  onMouseOver={(e: React.MouseEvent<HTMLButtonElement>) => {
                     e.currentTarget.style.backgroundColor = 'rgb(26, 216, 16)';
                     e.currentTarget.style.boxShadow = '0 5px 15px rgba(239, 65, 53, 0.4)';
                   }}
-                  onMouseOut={(e) => {
+                  onMouseOut={(e: React.MouseEvent<HTMLButtonElement>) => {
                     e.currentTarget.style.backgroundColor = '#70ef35';
                     e.currentTarget.style.boxShadow = 'none';
                   }}
@@ -338,6 +452,20 @@ export function Header(props: HeaderProps) {
                 </button>
               </>
             ) : (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <button
+                  onClick={() => setContactOpen(true)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#2F80ED',
+                    fontWeight: '600',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Contactez-nous
+                </button>
+              
               <button 
                 onClick={handleLogout}
                 style={{
@@ -351,11 +479,11 @@ export function Header(props: HeaderProps) {
                   borderRadius: '50px',
                   transition: 'all 0.3s ease'
                 }}
-                onMouseOver={(e) => {
+                onMouseOver={(e: React.MouseEvent<HTMLButtonElement>) => {
                   e.currentTarget.style.backgroundColor = '#dc3545';
                   e.currentTarget.style.color = 'white';
                 }}
-                onMouseOut={(e) => {
+                onMouseOut={(e: React.MouseEvent<HTMLButtonElement>) => {
                   e.currentTarget.style.backgroundColor = 'transparent';
                   e.currentTarget.style.color = '#dc3545';
                 }}
@@ -363,9 +491,12 @@ export function Header(props: HeaderProps) {
                 <LogOut style={{ width: '16px', height: '16px', display: 'inline', marginRight: '5px' }} />
                 Déconnexion
               </button>
+              </div>
             )}
           </nav>
 
+          {/* Contact Modal */}
+          <ContactModal open={contactOpen} onClose={() => setContactOpen(false)} onSubmit={() => setContactOpen(false)} />
           {/* Mobile Menu Button */}
           <button 
             onClick={toggleMenu}
@@ -407,8 +538,8 @@ export function Header(props: HeaderProps) {
                 borderBottom: '1px solid #e5e7eb',
                 transition: 'background-color 0.2s'
               }}
-              onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#f3f4f6'}
-              onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+              onMouseOver={(e: React.MouseEvent<HTMLButtonElement>) => e.currentTarget.style.backgroundColor = '#f3f4f6'}
+              onMouseOut={(e: React.MouseEvent<HTMLButtonElement>) => e.currentTarget.style.backgroundColor = 'transparent'}
             >
               Accueil
             </button>
@@ -427,8 +558,8 @@ export function Header(props: HeaderProps) {
                 borderBottom: '1px solid #e5e7eb',
                 transition: 'background-color 0.2s'
               }}
-              onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#f3f4f6'}
-              onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+              onMouseOver={(e: React.MouseEvent<HTMLButtonElement>) => e.currentTarget.style.backgroundColor = '#f3f4f6'}
+              onMouseOut={(e: React.MouseEvent<HTMLButtonElement>) => e.currentTarget.style.backgroundColor = 'transparent'}
             >
               Équipe
             </button>
@@ -448,8 +579,8 @@ export function Header(props: HeaderProps) {
                   borderBottom: '1px solid #e5e7eb',
                   transition: 'background-color 0.2s'
                 }}
-                onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#f3f4f6'}
-                onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                onMouseOver={(e: React.MouseEvent<HTMLButtonElement>) => e.currentTarget.style.backgroundColor = '#f3f4f6'}
+                onMouseOut={(e: React.MouseEvent<HTMLButtonElement>) => e.currentTarget.style.backgroundColor = 'transparent'}
               >
                 Tableau de bord
               </button>
@@ -472,10 +603,10 @@ export function Header(props: HeaderProps) {
                       width: '100%',
                       transition: 'all 0.2s'
                     }}
-                    onMouseOver={(e) => {
+                    onMouseOver={(e: React.MouseEvent<HTMLButtonElement>) => {
                       e.currentTarget.style.backgroundColor = '#e6f0f7';
                     }}
-                    onMouseOut={(e) => {
+                    onMouseOut={(e: React.MouseEvent<HTMLButtonElement>) => {
                       e.currentTarget.style.backgroundColor = 'transparent';
                     }}
                   >
@@ -495,10 +626,10 @@ export function Header(props: HeaderProps) {
                       width: '100%',
                       transition: 'all 0.2s'
                     }}
-                    onMouseOver={(e) => {
+                    onMouseOver={(e: React.MouseEvent<HTMLButtonElement>) => {
                       e.currentTarget.style.backgroundColor = 'rgb(26, 216, 16)';
                     }}
-                    onMouseOut={(e) => {
+                    onMouseOut={(e: React.MouseEvent<HTMLButtonElement>) => {
                       e.currentTarget.style.backgroundColor = '#159205';
                     }}
                   >
@@ -520,11 +651,11 @@ export function Header(props: HeaderProps) {
                     width: '100%',
                     transition: 'all 0.2s'
                   }}
-                  onMouseOver={(e) => {
+                  onMouseOver={(e: React.MouseEvent<HTMLButtonElement>) => {
                     e.currentTarget.style.backgroundColor = '#dc3545';
                     e.currentTarget.style.color = 'white';
                   }}
-                  onMouseOut={(e) => {
+                  onMouseOut={(e: React.MouseEvent<HTMLButtonElement>) => {
                     e.currentTarget.style.backgroundColor = 'transparent';
                     e.currentTarget.style.color = '#dc3545';
                   }}
