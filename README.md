@@ -1,7 +1,7 @@
 
 # projet_velib
-Test email: admin@example.com
-Password: admin
+Test email: admin@example.com    Password: admin
+
 Projet_velib est une plateforme d'analyse complète du système de vélos en libre-service Vélib' à Paris. Voici son fonctionnement :
 ## But
 Analyse les données en temps réel et historiques des stations de vélos en libre-service afin de fournir des informations sur les habitudes d'utilisation, les tendances de disponibilité et les performances des stations dans les arrondissements parisiens.
