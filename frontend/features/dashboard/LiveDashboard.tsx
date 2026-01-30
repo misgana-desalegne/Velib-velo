@@ -87,14 +87,55 @@ export function LiveDashboard() {
         : `${API_ENDPOINTS.hourlyAnalytics}summary/?days=1`;
 
       const summary = await api.get(summaryUrl);
+
+      // Normalize to 24-hour array so charts always show all hours
+      const normalizeHourlySummary = (raw: any[]): any[] => {
+        const byHour = new Map<number, any>();
+        if (Array.isArray(raw)) {
+          raw.forEach(r => {
+            let h: number | null = null;
+            if (r == null) return;
+            if (typeof r.hour === 'number') h = r.hour;
+            else if (typeof r.hour === 'string') {
+              const m = r.hour.match(/(\d{1,2})/);
+              if (m) h = parseInt(m[1], 10);
+            } else if (r.hour_ts) {
+              try { h = new Date(r.hour_ts).getHours(); } catch(e) { h = null; }
+            }
+            if (h == null || !Number.isFinite(h)) return;
+            h = ((h % 24) + 24) % 24;
+            byHour.set(h, r);
+          });
+        }
+
+        return Array.from({ length: 24 }, (_, hour) => {
+          const src = byHour.get(hour) || {};
+          const toNum = (v: any) => (v == null || Number.isNaN(Number(v)) ? 0 : Number(v));
+          return {
+            hour: `${String(hour).padStart(2, '0')}:00`,
+            bikes: toNum(src.bikes ?? src.bikes_available_avg ?? src.bikes_available ?? src.available_bikes),
+            docks: toNum(src.docks ?? src.docks_available_avg ?? src.docks_available ?? src.available_docks),
+            flux: toNum(src.net_flux ?? src.hourly_delta ?? src.flux ?? 0),
+            cv: toNum(src.cv ?? src.shannon_entropy ?? 0),
+          };
+        });
+      };
+
       if (Array.isArray(summary)) {
-        setHourlyData(summary);
+        setHourlyData(normalizeHourlySummary(summary));
       } else {
-        setHourlyData([]);
+        setHourlyData(normalizeHourlySummary([]));
       }
     } catch (err) {
       console.error('Error fetching hourly analytics summary:', err);
-      setHourlyData([]);
+      // fallback to empty 24-hour series so the chart renders
+      setHourlyData(Array.from({ length: 24 }, (_, hour) => ({
+        hour: `${String(hour).padStart(2, '0')}:00`,
+        bikes: 0,
+        docks: 0,
+        flux: 0,
+        cv: 0,
+      })));
     }
   };
 

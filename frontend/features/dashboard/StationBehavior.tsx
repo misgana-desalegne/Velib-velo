@@ -315,7 +315,8 @@ export function StationBehavior() {
 
               setDailyBehaviorData(dailyData);
             } else {
-              setDailyBehaviorData([]);
+              // ensure UI always has 24-hour data for charts
+              setDailyBehaviorData(getDefaultHourlyData());
             }
 
             if (Array.isArray(dailyResults) && dailyResults.length > 0) {
