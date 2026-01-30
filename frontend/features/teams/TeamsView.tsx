@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Github, Globe, Linkedin, Mail, Pencil, Trash2, Plus, Save, X, AlertCircle } from 'lucide-react';
+import { Github, Globe, Linkedin, Mail, Pencil, Trash2, Plus, Save, X, AlertCircle, FileText } from 'lucide-react';
 
 import type { AppPage } from '../../shared/types/navigation';
 import gretaLogo from '../../assets/images/Logo-Greta.png';
@@ -17,6 +17,7 @@ export interface TeamMember {
   linkedinUrl?: string;
   email?: string;
   websiteUrl?: string;
+  cvUrl?: string;
 }
 
 const STORAGE_KEY = 'parisCycle.teamMembers.v1';
@@ -305,6 +306,11 @@ export function TeamsView({
                     <Mail className={styles.socialIcon} />
                   </a>
                 )}
+                {member.cvUrl && (
+                  <a href={member.cvUrl} target="_blank" rel="noreferrer" className={styles.socialLink} title="CV">
+                    <FileText className={styles.socialIcon} />
+                  </a>
+                )}
               </div>
 
               {/* Delete Confirmation */}
@@ -458,6 +464,63 @@ export function TeamsView({
                     </button>
                   </div>
                 )}
+
+                {/* CV Importer */}
+                <label className={styles.formGroup}>
+                  <span className={styles.formLabel}>CV (PDF/DOC)</span>
+                  <div className={styles.imageInputContainer}>
+                    <input
+                      type="text"
+                      className={styles.formInput}
+                      value={draft.cvUrl ?? ''}
+                      onChange={(e) => setDraft((d) => (d ? { ...d, cvUrl: e.target.value } : d))}
+                      placeholder="Lien vers CV ou importer un fichier"
+                    />
+                    <label className={styles.imageUploadButton}>
+                      <input
+                        type="file"
+                        accept=".pdf,.doc,.docx"
+                        className={styles.fileInput}
+                        onChange={async (e) => {
+                          const file = e.currentTarget.files?.[0];
+                          e.currentTarget.value = '';
+                          if (!file) return;
+                          try {
+                            const dataUrl = await fileToDataUrl(file);
+                            setDraft((d) => (d ? { ...d, cvUrl: dataUrl } : d));
+                          } catch {
+                            // Ignore error
+                          }
+                        }}
+                      />
+                      <span>Importer CV</span>
+                    </label>
+                  </div>
+
+                  {/* CV Preview */}
+                  {draft.cvUrl && (
+                    <div className={styles.imagePreview}>
+                      <div className={styles.cvPreviewInfo}>
+                        <FileText className={styles.previewIcon} />
+                        <div>
+                          <p className={styles.previewTitle}>CV importé</p>
+                          <p className={styles.previewUrl}>{draft.cvUrl.startsWith('data:') ? 'Fichier importé (stocké localement)' : draft.cvUrl}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <a href={draft.cvUrl} target="_blank" rel="noreferrer" className={styles.openCvLink}>Ouvrir</a>
+                        <button
+                          type="button"
+                          className={styles.clearImageButton}
+                          onClick={() => setDraft((d) => (d ? { ...d, cvUrl: undefined } : d))}
+                          title="Supprimer le CV"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </label>
               </label>
 
               {/* Row 3: Links */}
