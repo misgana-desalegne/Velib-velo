@@ -1,0 +1,38 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Run makemigrations for contact message",
+			"type": "shell",
+			"command": "python",
+			"args": [
+				"manage.py",
+				"makemigrations",
+				"apps.analytics"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Run makemigrations for analytics",
+			"type": "shell",
+			"command": "python",
+			"args": [
+				"manage.py",
+				"makemigrations",
+				"analytics"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Apply migrations for analytics",
+			"type": "shell",
+			"command": "python",
+			"args": [
+				"manage.py",
+				"migrate",
+				"analytics"
+			],
+			"group": "build"
+		}
+	]
+}

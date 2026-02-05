@@ -1,0 +1,682 @@
+/* Container and Layout */
+.container {
+  width: 100%;
+  background: #ffffff;
+  min-height: 100vh;
+  padding-top: 2.5rem;
+  padding-bottom: 3rem;
+}
+
+/* Header Section */
+.headerSection {
+  margin-bottom: 3rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  max-width: 80rem;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 1.5rem;
+  padding-right: 1.5rem;
+}
+
+@media (min-width: 1024px) {
+  .headerSection {
+    flex-direction: row;
+    align-items: flex-end;
+    justify-content: space-between;
+  }
+}
+
+.headerContent {
+  flex: 1;
+}
+
+.headerBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background-color: #dbeafe;
+  color: #1e40af;
+  padding: 0.75rem 1rem;
+  border-radius: 9999px;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.badgeDot {
+  height: 0.5rem;
+  width: 0.5rem;
+  border-radius: 50%;
+  background-color: #1e40af;
+}
+
+.headerTitle {
+  margin-top: 1rem;
+  font-size: 2rem;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  color: #111827;
+  line-height: 1.2;
+}
+
+@media (min-width: 640px) {
+  .headerTitle {
+    font-size: 2.25rem;
+  }
+}
+
+.headerDescription {
+  margin-top: 0.75rem;
+  max-width: 42rem;
+  font-size: 1rem;
+  color: #4b5563;
+  line-height: 1.6;
+}
+
+/* Add Button */
+.addButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: #2563eb;
+  color: white;
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.75rem;
+  font-size: 1rem;
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(31, 169, 113, 0.3);
+}
+
+.addButton:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.4);
+}
+
+.addButtonIcon {
+  height: 1.25rem;
+  width: 1.25rem;
+}
+
+/* Grid Container */
+.gridContainer {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 1.5rem;
+  max-width: 80rem;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 1.5rem;
+  padding-right: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+@media (min-width: 640px) {
+  .gridContainer {
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  }
+}
+
+/* Team Card */
+.teamCard {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background: white;
+  border-radius: 1.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e5e7eb;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.teamCard:hover {
+  transform: translateY(-0.5rem);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  border-color: #d1d5db;
+}
+
+.cardGradientBar {
+  height: 4px;
+  background: #16a34a;
+  width: 100%;
+}
+
+.cardContent {
+  padding: 1.5rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.avatarWrapper {
+  position: relative;
+  width: 160px;
+  height: 160px;
+  flex-shrink: 0;
+  border-radius: 9999px;
+  overflow: hidden;
+  background: white;
+  border: 3px solid transparent;
+  background-clip: padding-box;
+  padding: 6px;
+  background-color: #2563eb;
+  background-origin: border-box;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+}
+
+.avatar {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 9999px;
+  display: block;
+}
+
+.avatarPlaceholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #dbeafe;
+  font-size: 3rem;
+  font-weight: 700;
+  color: #1e40af;
+  border-radius: 9999px;
+}
+
+.infoSection {
+  flex: 1;
+  min-width: 0;
+}
+
+.nameRow {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.memberName {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #111827;
+  word-break: break-word;
+}
+
+.profileButton {
+  padding: 0.25rem 0.75rem;
+  background-color: #dbeafe;
+  color: #1e40af;
+  border: none;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.profileButton:hover {
+  background-color: #bfdbfe;
+}
+
+.memberRole {
+  margin-top: 0.5rem;
+  font-size: 0.875rem;
+  color: #6b7280;
+  line-height: 1.5;
+}
+
+.memberRoleEmpty {
+  margin-top: 0.5rem;
+  font-size: 0.875rem;
+  color: #9ca3af;
+  font-style: italic;
+}
+
+.cardActions {
+  display: flex;
+  gap: 0.5rem;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.editButton,
+.deleteButton {
+  padding: 0.5rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.75rem;
+  background: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.editButton {
+  color: #3b82f6;
+}
+
+.editButton:hover {
+  background-color: #eff6ff;
+  border-color: #93c5fd;
+}
+
+.deleteButton {
+  color: #ef4444;
+}
+
+.deleteButton:hover {
+  background-color: #fef2f2;
+  border-color: #fecaca;
+}
+
+.editIcon,
+.deleteIcon {
+  height: 1rem;
+  width: 1rem;
+}
+
+/* Social Links */
+.socialLinks {
+  display: flex;
+  gap: 0.75rem;
+  padding: 0 1.5rem 1.5rem 1.5rem;
+  border-top: 1px solid #f3f4f6;
+  padding-top: 1rem;
+  flex-wrap: wrap;
+}
+
+.socialLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.75rem;
+  color: #6b7280;
+  text-decoration: none;
+  transition: all 0.2s ease;
+}
+
+.socialLink:hover {
+  background-color: #f9fafb;
+  border-color: #d1d5db;
+  color: #111827;
+}
+
+.socialIcon {
+  height: 1.25rem;
+  width: 1.25rem;
+}
+
+/* Delete Confirmation */
+.deleteConfirmation {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  background: #fef2f2;
+  border-radius: 1.5rem;
+  backdrop-filter: blur(4px);
+  animation: slideUp 0.3s ease;
+}
+
+.confirmIcon {
+  height: 1.5rem;
+  width: 1.5rem;
+  color: #ef4444;
+  flex-shrink: 0;
+}
+
+.confirmText {
+  font-weight: 600;
+  color: #111827;
+  margin-bottom: 0.25rem;
+}
+
+.confirmSubtext {
+  font-size: 0.875rem;
+  color: #6b7280;
+}
+
+.confirmActions {
+  display: flex;
+  gap: 0.5rem;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.confirmCancel,
+.confirmDelete {
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.confirmCancel {
+  background: white;
+  color: #6b7280;
+  border: 1px solid #d1d5db;
+}
+
+.confirmCancel:hover {
+  background: #f9fafb;
+}
+
+.confirmDelete {
+  background: #ef4444;
+  color: white;
+}
+
+.confirmDelete:hover {
+  background: #dc2626;
+}
+
+/* Info Footer */
+.infoFooter {
+  text-align: center;
+  font-size: 0.875rem;
+  color: #6b7280;
+  max-width: 80rem;
+  margin-left: auto;
+  margin-right: auto;
+  padding: 0 1.5rem;
+}
+
+/* Modal */
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(8px);
+  animation: fadeIn 0.2s ease;
+}
+
+.modalDialog {
+  position: relative;
+  width: 100%;
+  max-width: 42rem;
+  background: white;
+  border-radius: 1.5rem;
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.15);
+  border: 1px solid #f0f1f3;
+  overflow: hidden;
+  animation: slideUp 0.3s ease;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.modalHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.5rem;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.modalLabel {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #6b7280;
+  margin-bottom: 0.25rem;
+}
+
+.modalTitle {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #111827;
+}
+
+.modalCloseButton {
+  padding: 0.5rem;
+  border-radius: 0.75rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #6b7280;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.modalCloseButton:hover {
+  background: #f3f4f6;
+  color: #111827;
+}
+
+.modalCloseIcon {
+  height: 1.25rem;
+  width: 1.25rem;
+}
+
+.modalForm {
+  padding: 1.5rem;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.formRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.formGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.formLabel {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #374151;
+}
+
+.formInput {
+  padding: 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.75rem;
+  font-size: 0.875rem;
+  background: white;
+  transition: all 0.2s ease;
+  outline: none;
+}
+
+.formInput:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.imageInputContainer {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.imageInputContainer .formInput {
+  flex: 1;
+}
+
+.imageUploadButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.75rem 1rem;
+  background: #dbeafe;
+  color: #1e40af;
+  border: 1px solid #93c5fd;
+  border-radius: 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.imageUploadButton:hover {
+  background: #bfdbfe;
+  border-color: #60a5fa;
+}
+
+.fileInput {
+  display: none;
+}
+
+.imagePreview {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  background: #f9fafb;
+  border-radius: 1rem;
+  border: 1px solid #e5e7eb;
+  margin-bottom: 1rem;
+}
+
+.previewImage {
+  height: 3.5rem;
+  width: 3.5rem;
+  border-radius: 0.75rem;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.previewTitle {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #111827;
+  margin-bottom: 0.25rem;
+}
+
+.previewUrl {
+  font-size: 0.75rem;
+  color: #6b7280;
+  word-break: break-all;
+  max-width: 200px;
+}
+
+.clearImageButton {
+  padding: 0.5rem;
+  border-radius: 0.5rem;
+  background: white;
+  border: 1px solid #d1d5db;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-left: auto;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.clearImageButton:hover {
+  background: #fee2e2;
+  border-color: #fca5a5;
+  color: #ef4444;
+}
+
+.modalFooter {
+  display: flex;
+  gap: 1rem;
+  flex-direction: row-reverse;
+  padding: 1.5rem;
+  border-top: 1px solid #f3f4f6;
+  background: #f9fafb;
+}
+
+@media (max-width: 640px) {
+  .modalFooter {
+    flex-direction: column-reverse;
+  }
+}
+
+.cancelButton,
+.saveButton {
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.cancelButton {
+  background: white;
+  color: #111827;
+  border: 1px solid #d1d5db;
+}
+
+.cancelButton:hover {
+  background: #f3f4f6;
+  border-color: #9ca3af;
+}
+
+.saveButton {
+  background: #16a34a;
+  color: white;
+  box-shadow: 0 4px 12px rgba(22, 163, 74, 0.3);
+}
+
+.saveButton:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(22, 163, 74, 0.4);
+}
+
+.saveButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.saveIcon {
+  height: 1rem;
+  width: 1rem;
+}
+
+/* Animations */
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(1rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}

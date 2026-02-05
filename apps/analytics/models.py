@@ -1,0 +1,354 @@
+from django.db import models
+from django.utils import timezone
+from datetime import timedelta
+
+class CommuneManager(models.Manager):
+    """Custom manager for Commune model"""
+    
+    def with_station_count(self):
+        """Annotate communes with station count"""
+        return self.annotate(station_count=models.Count('stations'))
+    
+    def active_communes(self):
+        """Get communes that have at least one active station"""
+        return self.filter(stations__is_installed=True).distinct()
+
+
+class BikeStationManager(models.Manager):
+    """Custom manager for BikeStation model"""
+    
+    def active_stations(self):
+        """Get only active stations"""
+        return self.filter(is_installed=True)
+    
+    def by_commune(self, commune_code):
+        """Get stations by commune code"""
+        return self.filter(commune__code=commune_code)
+    
+    def with_latest_status(self):
+        """Get stations with their latest status prefetched"""
+        return self.select_related('commune').prefetch_related('statuses')
+
+
+class StationStatusManager(models.Manager):
+    """Custom manager for StationStatus model"""
+    
+    def recent(self, hours=24):
+        """Get status records from the last N hours"""
+        since = timezone.now() - timedelta(hours=hours)
+        return self.filter(timestamp__gte=since)
+    
+    def for_station(self, station):
+        """Get all status records for a specific station"""
+        return self.filter(station=station).order_by('-timestamp')
+    
+    def latest_for_stations(self):
+        """Get the latest status for each station"""
+        return self.order_by('station', '-timestamp').distinct('station')
+
+class DailyAnalyticsManager(models.Manager):
+    """Custom manager for DailyAnalytics model"""
+    
+    def recent(self, days=30):
+        """Get analytics from the last N days"""
+        since = timezone.now().date() - timedelta(days=days)
+        return self.filter(date__gte=since)
+    
+    def for_commune(self, commune):
+        """Get analytics for a specific commune"""
+        return self.filter(commune=commune)
+
+# Contact message model for 'Nous Contactons' form
+from django.contrib.auth import get_user_model
+
+class ContactMessage(models.Model):
+    user = models.ForeignKey(get_user_model(), on_delete=models.SET_NULL, null=True, blank=True)
+    name = models.CharField(max_length=100)
+    email = models.EmailField()
+    phone = models.CharField(max_length=30, blank=True)
+    message = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.name} ({self.email}) - {self.created_at:%Y-%m-%d %H:%M}"
+    
+    def for_station(self, station):
+        """Get analytics for a specific station"""
+        return self.filter(station=station)
+
+
+import uuid
+
+
+class TeamMember(models.Model):
+    """Team members for the public Teams view. Stored in DB so content can be managed by admin."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=200)
+    role = models.CharField(max_length=200, blank=True)
+    image_url = models.TextField(blank=True, null=True, help_text='URL or data URL for the avatar')
+    github_url = models.CharField(max_length=500, blank=True, null=True)
+    linkedin_url = models.CharField(max_length=500, blank=True, null=True)
+    email = models.EmailField(blank=True, null=True)
+    website_url = models.CharField(max_length=500, blank=True, null=True)
+    cv_url = models.CharField(max_length=1000, blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.name} ({self.role})"
+
+
+class WeeklyAnalyticsManager(models.Manager):
+    """Custom manager for WeeklyAnalytics model"""
+    
+    def recent(self, weeks=12):
+        """Get analytics from the last N weeks"""
+        since = timezone.now().date() - timedelta(weeks=weeks)
+        return self.filter(week_start_date__gte=since)
+    
+    def for_commune(self, commune):
+        """Get analytics for a specific commune"""
+        return self.filter(commune=commune)
+    
+    def for_station(self, station):
+        """Get analytics for a specific station"""
+        return self.filter(station=station)
+    
+    def for_week(self, week_start_date):
+        """Get all analytics for a specific week"""
+        return self.filter(week_start_date=week_start_date)
+
+
+class Commune(models.Model):
+    """Model for Communes/Cities where Vélib stations are located"""
+    code = models.CharField(max_length=10, unique=True)  # INSEE code
+    name = models.CharField(max_length=100)
+    population = models.IntegerField()
+    area_km2 = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    
+    objects = CommuneManager()
+    
+    class Meta:
+        ordering = ['code']
+    
+    def __str__(self):
+        return f"{self.code} - {self.name}"
+
+
+class BikeStation(models.Model):
+    """Model for bike sharing stations"""
+    PROFILE_CHOICES = [
+        ('commuter_source', 'Commuter Source'),  # Morning depleting, evening filling
+        ('commuter_sink', 'Commuter Sink'),      # Morning filling, evening depleting
+        ('balanced_hub', 'Balanced Hub'),        # Consistent flow throughout day
+        ('ghost_station', 'Ghost Station'),      # Low entropy, low activity
+        ('unknown', 'Unknown'),                  # Not yet classified
+    ]
+    
+    stationcode = models.IntegerField(unique=True)
+    name = models.CharField(max_length=200)
+    is_installed = models.BooleanField(default=True)
+    capacity = models.IntegerField()
+    numdocksavailable = models.IntegerField(default=0)
+    numbikesavailable = models.IntegerField(default=0)
+    mechanical = models.IntegerField(default=0)
+    ebike = models.IntegerField(default=0)
+    is_renting = models.BooleanField(default=True)
+    is_returning = models.BooleanField(default=True)
+    duedate = models.DateTimeField(null=True, blank=True)
+    
+    commune = models.ForeignKey(Commune, on_delete=models.CASCADE, related_name='stations', null=True, blank=True)
+    latitude = models.FloatField()
+    longitude = models.FloatField()
+    # Coordinate storage as JSON string for geographic queries: {"type": "Point", "coordinates": [lon, lat]}
+    coordinates = models.JSONField(null=True, blank=True, help_text="Geographic coordinates as GeoJSON Point")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    # Station profile classification
+    profile = models.CharField(max_length=20, choices=PROFILE_CHOICES, default='unknown')
+    
+    objects = BikeStationManager()
+    
+    class Meta:
+        ordering = ['stationcode']
+    
+    def save(self, *args, **kwargs):
+        """Automatically sync coordinates GeoJSON from latitude/longitude"""
+        if self.latitude and self.longitude:
+            self.coordinates = {
+                "type": "Point",
+                "coordinates": [float(self.longitude), float(self.latitude)]
+            }
+        super().save(*args, **kwargs)
+    
+    def __str__(self):
+        return f"{self.stationcode} - {self.name}"
+
+
+class StationStatus(models.Model):
+    """Real-time status of bike stations"""
+    station = models.ForeignKey(BikeStation, on_delete=models.CASCADE, related_name='statuses')
+    timestamp = models.DateTimeField(default=timezone.now)
+    available_bikes = models.IntegerField()
+    available_docks = models.IntegerField()
+    objects = StationStatusManager()
+    
+    is_operational = models.BooleanField(default=True)
+    
+    class Meta:
+        ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['-timestamp']),
+            models.Index(fields=['station', '-timestamp']),
+        ]
+    
+    def __str__(self):
+        return f"{self.station.stationcode} - {self.timestamp}"
+    
+    @property
+    def utilization_rate(self):
+        total = self.available_bikes + self.available_docks
+        if total > 0:
+            return round((self.available_bikes / total) * 100, 2)
+        return 0
+
+
+class HourlyAnalytics(models.Model):
+    """Hourly aggregated analytics for stations and communes"""
+    timestamp = models.DateTimeField(help_text="Hour timestamp (rounded down)")
+    date = models.DateField(help_text="Date of the hour")
+    hour = models.IntegerField(help_text="Hour of day (0-23)")
+    
+    # Foreign keys
+    commune = models.ForeignKey(Commune, on_delete=models.CASCADE, related_name='hourly_analytics', null=True, blank=True)
+    station = models.ForeignKey(BikeStation, on_delete=models.CASCADE, related_name='hourly_analytics', null=True, blank=True)
+    
+    # Basic metrics
+    average_utilization = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Average bike utilization %")
+    bikes_available_avg = models.IntegerField(default=0, help_text="Average bikes available")
+    docks_available_avg = models.IntegerField(default=0, help_text="Average docks available")
+    
+    # Signal analysis metrics
+    hourly_delta = models.DecimalField(max_digits=8, decimal_places=2, default=0, help_text="Change in bikes from previous hour")
+    data_points = models.IntegerField(default=0, help_text="Number of status records for this hour")
+    
+    class Meta:
+        ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['-timestamp']),
+            models.Index(fields=['station', '-timestamp']),
+            models.Index(fields=['commune', '-timestamp']),
+            models.Index(fields=['date', 'hour']),
+        ]
+        unique_together = [
+            ['timestamp', 'station'],
+            ['timestamp', 'commune'],
+        ]
+    
+    def __str__(self):
+        if self.station:
+            return f"Hourly analytics for {self.station.stationcode} on {self.timestamp}"
+        elif self.commune:
+            return f"Hourly analytics for {self.commune.code} on {self.timestamp}"
+        return f"Hourly analytics on {self.timestamp}"
+
+
+class DailyAnalytics(models.Model):
+    """Aggregated daily analytics with signal analysis metrics"""
+    date = models.DateField()
+    commune = models.ForeignKey(Commune, on_delete=models.CASCADE, related_name='daily_analytics', null=True, blank=True)
+    station = models.ForeignKey(BikeStation, on_delete=models.CASCADE, related_name='daily_analytics', null=True, blank=True)
+    
+    # Basic metrics
+    average_utilization = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    peak_hour = models.IntegerField(null=True, blank=True)
+    
+    # Signal analysis metrics
+    average_hourly_delta = models.DecimalField(max_digits=8, decimal_places=2, default=0, help_text="Average hourly change in bike count (V_h)")
+    shannon_entropy = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Station predictability (0-8)")
+    net_flux = models.DecimalField(max_digits=8, decimal_places=2, default=0, help_text="Sum of all deltas (Source > 0, Sink < 0)")
+    persistence_at_full = models.IntegerField(default=0, help_text="Hours at 100% capacity")
+    persistence_at_empty = models.IntegerField(default=0, help_text="Hours at 0% capacity")
+    
+    # Categorization
+    is_source = models.BooleanField(default=False, help_text="Net positive flux (supplies bikes)")
+    is_sink = models.BooleanField(default=False, help_text="Net negative flux (demands bikes)")
+    is_ghost = models.BooleanField(default=False, help_text="Low entropy + low turnover")
+    
+    objects = DailyAnalyticsManager()
+    
+    class Meta:
+        ordering = ['-date']
+        indexes = [
+            models.Index(fields=['-date']),
+            models.Index(fields=['commune', '-date']),
+            models.Index(fields=['station', '-date']),
+            models.Index(fields=['is_source']),
+            models.Index(fields=['is_sink']),
+            models.Index(fields=['is_ghost']),
+        ]
+        unique_together = [
+            ['date', 'commune', 'station'],
+        ]
+    
+    def __str__(self):
+        if self.commune:
+            return f"Analytics for {self.commune.code} on {self.date}"
+        elif self.station:
+            return f"Analytics for {self.station.stationcode} on {self.date}"
+        return f"Analytics for {self.date}"
+
+
+class WeeklyAnalytics(models.Model):
+    """Aggregated weekly analytics with signal analysis metrics"""
+    week_start_date = models.DateField(help_text="Monday of the week")
+    week_end_date = models.DateField(help_text="Sunday of the week")
+    commune = models.ForeignKey(Commune, on_delete=models.CASCADE, related_name='weekly_analytics', null=True, blank=True)
+    station = models.ForeignKey(BikeStation, on_delete=models.CASCADE, related_name='weekly_analytics', null=True, blank=True)
+    
+    # Basic aggregated metrics
+    average_utilization = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Average bike utilization rate")
+    peak_day = models.IntegerField(null=True, blank=True, choices=[(i, ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'][i]) for i in range(7)], help_text="Busiest day of week (0=Monday, 6=Sunday)")
+    peak_hour = models.IntegerField(null=True, blank=True, help_text="Most busy hour (0-23)")
+    
+    # Weekly signal analysis metrics
+    average_hourly_delta = models.DecimalField(max_digits=8, decimal_places=2, default=0, help_text="Average hourly change in bike count")
+    shannon_entropy = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Average entropy for the week (0-8)")
+    net_flux = models.DecimalField(max_digits=8, decimal_places=2, default=0, help_text="Weekly sum of all deltas")
+    persistence_at_full = models.IntegerField(default=0, help_text="Total hours at 100% capacity")
+    persistence_at_empty = models.IntegerField(default=0, help_text="Total hours at 0% capacity")
+    
+    # Weekly categorization
+    is_source = models.BooleanField(default=False, help_text="Net positive flux (supplies bikes)")
+    is_sink = models.BooleanField(default=False, help_text="Net negative flux (demands bikes)")
+    is_ghost = models.BooleanField(default=False, help_text="Low entropy + low turnover")
+    
+    # Operational metrics
+    operational_hours = models.IntegerField(default=0, help_text="Total hours operational")
+    maintenance_incidents = models.IntegerField(default=0, help_text="Number of maintenance events")
+    
+    objects = WeeklyAnalyticsManager()
+    
+    class Meta:
+        ordering = ['-week_start_date']
+        indexes = [
+            models.Index(fields=['-week_start_date']),
+            models.Index(fields=['commune', '-week_start_date']),
+            models.Index(fields=['station', '-week_start_date']),
+            models.Index(fields=['is_source']),
+            models.Index(fields=['is_sink']),
+            models.Index(fields=['is_ghost']),
+        ]
+        unique_together = [
+            ['week_start_date', 'commune', 'station'],
+        ]
+    
+    def __str__(self):
+        if self.commune:
+            return f"Weekly analytics for {self.commune.code} (Week {self.week_start_date} - {self.week_end_date})"
+        elif self.station:
+            return f"Weekly analytics for {self.station.stationcode} (Week {self.week_start_date} - {self.week_end_date})"
+        return f"Weekly analytics (Week {self.week_start_date} - {self.week_end_date})"
