@@ -88,6 +88,7 @@ export function LiveDashboard() {
         : `${API_ENDPOINTS.hourlyAnalytics}summary/?days=1`;
 
       const summary = await api.get(summaryUrl);
+      const rawSummary = summary && (summary.results || summary) ? (summary.results || summary) : [];
 
       // Normalize to 24-hour array so charts always show all hours
       const normalizeHourlySummary = (raw: any[]): any[] => {
@@ -122,8 +123,8 @@ export function LiveDashboard() {
         });
       };
 
-      if (Array.isArray(summary)) {
-        setHourlyData(normalizeHourlySummary(summary));
+      if (Array.isArray(rawSummary)) {
+        setHourlyData(normalizeHourlySummary(rawSummary));
       } else {
         setHourlyData(normalizeHourlySummary([]));
       }

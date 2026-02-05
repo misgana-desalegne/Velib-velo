@@ -99,10 +99,6 @@ Analyse les données en temps réel et historiques des stations de vélos en lib
     ├── setup.sh / setup.bat / setup.ps1
     └── Documentation files (*.md, *.html)
 ## Pour essayer
-
-        Copy `.env.example` to `.env`
-        Add your API keys to `.env`
-        
         Run `npm i` to install the dependencies.
         Run `npm run dev` to start the React dev server
         
