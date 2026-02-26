@@ -5,7 +5,9 @@ This service handles complex operations related to communes.
 from django.utils import timezone
 from datetime import timedelta
 from django.db.models import Max, Avg
+
 from ..models import Commune, BikeStation, StationStatus, DailyAnalytics, HourlyAnalytics
+from ..serializers import HourlyAnalyticsSerializer
 from .advanced_analytics_service import AdvancedAnalyticsService
 
 
@@ -13,12 +15,13 @@ class CommuneService:
     """Service class for Commune business logic"""
     
     @staticmethod
-    def get_commune_analytics(commune):
+    def get_commune_analytics(commune, hours: int = None):
         """
         Calculate detailed analytics for a specific commune.
         
         Args:
             commune: Commune instance
+            hours: Optional; number of hours for hourly timeseries
             
         Returns:
             dict: Analytics data including stations, bikes, entropy, etc.
@@ -40,15 +43,27 @@ class CommuneService:
         total_capacity = 0
         
         for status_info in latest_statuses:
-            latest = StationStatus.objects.get(
+            latest_ts = status_info.get('latest_timestamp')
+            if not latest_ts:
+                continue
+
+            # There may be multiple StationStatus records with the same
+            # station and timestamp (duplicates). Use filter + order_by
+            # and pick the first record to avoid MultipleObjectsReturned.
+            latest_qs = StationStatus.objects.filter(
                 station_id=status_info['station'],
-                timestamp=status_info['latest_timestamp']
-            )
+                timestamp=latest_ts
+            ).order_by('-id')
+
+            latest = latest_qs.first()
+            if not latest:
+                continue
+
             latest_status_records.append(latest)
             total_bikes += latest.available_bikes
             total_docks += latest.available_docks
             station = latest.station
-            if station.capacity:
+            if getattr(station, 'capacity', None):
                 total_capacity += station.capacity
         
         # Calculate average utilization (bikes / capacity)
@@ -64,7 +79,6 @@ class CommuneService:
         
         # Calculate average CV (Coefficient of Variation) from daily analytics
         # Try today first, then fall back to latest available date
-        from django.db.models import Q
         today = timezone.now().date()
         
         avg_cv = 0
@@ -112,8 +126,7 @@ class CommuneService:
             if cv_values:
                 avg_cv = round(sum(cv_values) / len(cv_values), 2)
         
-        
-        return {
+        result = {
             'code': commune.code,
             'name': commune.name,
             'stations': stations.count(),
@@ -124,7 +137,25 @@ class CommuneService:
             'cv': avg_cv,
             'population': commune.population,
         }
-    
+
+        # If caller requested hourly timeseries, include last `hours` hours of HourlyAnalytics
+        if hours:
+            try:
+                hours_int = int(hours)
+            except Exception:
+                hours_int = 24
+
+            since = timezone.now() - timedelta(hours=hours_int)
+            hourly_qs = HourlyAnalytics.objects.filter(
+                commune=commune,
+                timestamp__gte=since
+            ).order_by('timestamp')
+
+            # Serialize hourly rows
+            result['hourly'] = HourlyAnalyticsSerializer(hourly_qs, many=True).data
+
+        return result
+
     @staticmethod
     def get_all_communes_summary():
         """

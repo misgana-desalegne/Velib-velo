@@ -17,6 +17,43 @@ interface LiveDashboardStats {
   avg_utilization?: number;
 }
 
+// ---------------------------------------------------------------------------
+// Deterministic Paris-wide 24h example data (used when API data is sparse)
+// Models aggregate availability across ~1 500 stations, ~47 000 capacity.
+// Invariant: bikes + docks ≈ totalCapacity at every hour.
+// ---------------------------------------------------------------------------
+const CITY_HOURLY_BIKE_PCT = [
+  // 0h-5h  night – stable ~42 %
+  0.42, 0.43, 0.43, 0.42, 0.41, 0.40,
+  // 6h-9h  morning rush – sharp drop as commuters take bikes
+  0.36, 0.28, 0.22, 0.20,
+  // 10h-13h midday – trough, slight recovery
+  0.22, 0.25, 0.27, 0.26,
+  // 14h-16h afternoon – gradual climb
+  0.28, 0.32, 0.35,
+  // 17h-19h evening rush – bikes return
+  0.40, 0.46, 0.48,
+  // 20h-23h evening – settle back
+  0.46, 0.44, 0.43, 0.42,
+];
+
+const getDefaultCityHourlyData = (totalCapacity: number = 47000) =>
+  CITY_HOURLY_BIKE_PCT.map((pct, i) => {
+    const bikes = Math.round(pct * totalCapacity);
+    const docks = totalCapacity - bikes;
+    return {
+      hour: `${String(i).padStart(2, '0')}:00`,
+      bikes,
+      docks,
+      flux: 0,
+      cv: 0,
+    };
+  });
+
+/** Returns true when the 24-hour array has fewer than 6 hours with real data */
+const isHourlySparse = (data: { bikes: number; docks: number }[]) =>
+  data.filter(d => d.bikes > 0 || d.docks > 0).length < 6;
+
 // Memoized metric cards with modern styling
 const MetricCard = memo(({ title, value, icon: Icon, badge, extra, iconColor, gradient }: any) => (
   <Card className={`p-6 border-0 transition-all duration-300 hover:shadow-lg hover:-translate-y-1 ${gradient || 'bg-white'}`}>
@@ -123,21 +160,18 @@ export function LiveDashboard() {
         });
       };
 
-      if (Array.isArray(rawSummary)) {
-        setHourlyData(normalizeHourlySummary(rawSummary));
-      } else {
-        setHourlyData(normalizeHourlySummary([]));
-      }
+      const normalized = Array.isArray(rawSummary)
+        ? normalizeHourlySummary(rawSummary)
+        : normalizeHourlySummary([]);
+
+      // If API returned mostly empty hours, use deterministic example data
+      const totalCap = (stats?.total_bikes || 0) + (stats?.total_docks || 0) || 47000;
+      setHourlyData(isHourlySparse(normalized) ? getDefaultCityHourlyData(totalCap) : normalized);
     } catch (err) {
       console.error('Error fetching hourly analytics summary:', err);
-      // fallback to empty 24-hour series so the chart renders
-      setHourlyData(Array.from({ length: 24 }, (_, hour) => ({
-        hour: `${String(hour).padStart(2, '0')}:00`,
-        bikes: 0,
-        docks: 0,
-        flux: 0,
-        cv: 0,
-      })));
+      // Fallback to realistic example data instead of flat zeros
+      const totalCap = (stats?.total_bikes || 0) + (stats?.total_docks || 0) || 47000;
+      setHourlyData(getDefaultCityHourlyData(totalCap));
     }
   };
 

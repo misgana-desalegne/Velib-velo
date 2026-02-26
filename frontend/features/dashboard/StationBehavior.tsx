@@ -9,35 +9,93 @@ import { Badge } from '../../shared/ui/badge';
 import { api, API_ENDPOINTS } from '../../api/config';
 import { generateStationAnalysisPrompt, getExplanationWithCache } from '../../api/gemini';
 
-// Default/sample data for when API data isn't available
-// Updated to use Flux (Flux de Transit) and CV (Coefficient de Variation)
-const getDefaultHourlyData = () => Array.from({ length: 24 }, (_, i) => ({
-  hour: `${String(i).padStart(2, '0')}:00`,
-  bikes: Math.floor(20 + Math.random() * 30),
-  docks: Math.floor(15 + Math.random() * 35),
-  // Flux: Rate of change (positive = source, negative = sink)
-  flux: Math.floor(-10 + Math.random() * 20),
-  // CV: Activity Variability (0% = no activity, 0-20% = stale, 20-40% = moderate, >40% = highly active)
-  cv: parseFloat((Math.random() * 40 + 10).toFixed(2)),
-}));
+// ---------------------------------------------------------------------------
+// Deterministic example data generators (capacity-aware)
+// Models a realistic Parisian commuter-source station (residential area).
+// Invariant: bikes + docks = capacity  at every data point.
+// ---------------------------------------------------------------------------
 
-const getDefaultWeeklyData = () => [
-  { day: 'Lun', avgBikes: 22, peakBikes: 42, avgFlux: 2.5, avgCV: 21.0 },
-  { day: 'Mar', avgBikes: 24, peakBikes: 45, avgFlux: 3.1, avgCV: 23.0 },
-  { day: 'Mer', avgBikes: 23, peakBikes: 44, avgFlux: 1.8, avgCV: 20.0 },
-  { day: 'Jeu', avgBikes: 25, peakBikes: 46, avgFlux: 2.9, avgCV: 24.0 },
-  { day: 'Ven', avgBikes: 28, peakBikes: 48, avgFlux: 4.2, avgCV: 28.0 },
-  { day: 'Sam', avgBikes: 32, peakBikes: 45, avgFlux: 5.1, avgCV: 32.0 },
-  { day: 'Dim', avgBikes: 30, peakBikes: 42, avgFlux: 4.5, avgCV: 30.0 },
+/**
+ * 24-hour hourly pattern.
+ * Morning rush (7-9h)  → bikes leave (flux < 0, high CV)
+ * Midday (10-14h)      → low bikes, slight recovery
+ * Evening rush (17-19h) → bikes return (flux > 0, high CV)
+ * Night (22-5h)         → stable, low CV
+ */
+const HOURLY_BIKE_PCT = [
+  // 0h-5h  night – stable ~62%
+  0.62, 0.63, 0.63, 0.62, 0.61, 0.60,
+  // 6h-9h  morning rush – sharp drop
+  0.55, 0.42, 0.30, 0.28,
+  // 10h-13h midday – trough, slight recovery
+  0.30, 0.33, 0.35, 0.34,
+  // 14h-16h afternoon – gradual climb
+  0.36, 0.40, 0.44,
+  // 17h-19h evening rush – bikes return
+  0.52, 0.60, 0.65,
+  // 20h-23h evening – settle back
+  0.64, 0.63, 0.62, 0.62,
 ];
 
-const getDefaultMonthlyData = () => [
-  { date: 'Sem 1', bikes: 1245, flux: 12.5, cv: 21.0 },
-  { date: 'Sem 2', bikes: 1389, flux: 15.3, cv: 23.0 },
-  { date: 'Sem 3', bikes: 1423, flux: 13.8, cv: 22.0 },
-  { date: 'Sem 4', bikes: 1156, flux: 10.2, cv: 19.0 },
-  { date: 'Sem 5', bikes: 1534, flux: 18.5, cv: 26.0 },
+const HOURLY_CV = [
+  5, 4, 3, 3, 4, 6,        // night
+  12, 28, 38, 35,           // morning rush
+  22, 18, 15, 14,           // midday
+  13, 16, 20,               // afternoon
+  32, 36, 30,               // evening rush
+  18, 12, 8, 6,             // evening
 ];
+
+const getDefaultHourlyData = (capacity: number = 50) => {
+  let prev = Math.round(HOURLY_BIKE_PCT[0] * capacity);
+  return HOURLY_BIKE_PCT.map((pct, i) => {
+    const bikes = Math.round(pct * capacity);
+    const docks = capacity - bikes;
+    const flux = bikes - prev;
+    prev = bikes;
+    return {
+      hour: `${String(i).padStart(2, '0')}:00`,
+      bikes,
+      docks,
+      flux,
+      cv: HOURLY_CV[i],
+    };
+  });
+};
+
+/**
+ * Weekly pattern (Mon-Sun).
+ * Weekdays: commuter behaviour, avg bikes ~38-45% capacity.
+ * Weekend: leisure, avg bikes ~55-60% capacity.
+ */
+const WEEKLY_AVG_PCT  = [0.38, 0.40, 0.37, 0.42, 0.45, 0.58, 0.55];
+const WEEKLY_PEAK_PCT = [0.65, 0.67, 0.64, 0.68, 0.72, 0.78, 0.74];
+const WEEKLY_FLUX     = [ 2.5,  3.1,  1.8,  2.9,  4.2,  5.1,  4.5];
+const WEEKLY_CV       = [21.0, 23.0, 20.0, 24.0, 28.0, 32.0, 30.0];
+const DAY_NAMES       = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+
+const getDefaultWeeklyData = (capacity: number = 50) =>
+  DAY_NAMES.map((day, i) => {
+    const avgBikes  = Math.round(WEEKLY_AVG_PCT[i] * capacity);
+    const peakBikes = Math.round(WEEKLY_PEAK_PCT[i] * capacity);
+    const avgDocks  = capacity - avgBikes;
+    return { day, avgBikes, peakBikes, avgDocks, avgFlux: WEEKLY_FLUX[i], avgCV: WEEKLY_CV[i] };
+  });
+
+/**
+ * Monthly trend (5 weeks).
+ * Gradual increase in utilisation (seasonal warming / growing ridership).
+ */
+const MONTHLY_BIKE_PCT = [0.40, 0.44, 0.46, 0.43, 0.50];
+const MONTHLY_FLUX     = [12.5, 15.3, 13.8, 10.2, 18.5];
+const MONTHLY_CV       = [21.0, 23.0, 22.0, 19.0, 26.0];
+
+const getDefaultMonthlyData = (capacity: number = 50) =>
+  MONTHLY_BIKE_PCT.map((pct, i) => {
+    const bikes = Math.round(pct * capacity);
+    const docks = capacity - bikes;
+    return { date: `Sem ${i + 1}`, bikes, docks, flux: MONTHLY_FLUX[i], cv: MONTHLY_CV[i] };
+  });
 
 // Default popular stations - Updated with analytical metrics
 const getDefaultPopularStations = () => [
@@ -301,22 +359,23 @@ export function StationBehavior() {
             const hourlyResponse = await api.get(hourlyUrl);
             const hourlyResults = hourlyResponse?.results || hourlyResponse || [];
 
-            if (Array.isArray(hourlyResults) && hourlyResults.length > 0) {
+            // Use real data only when there are enough points for a meaningful chart (≥6 hours)
+            if (Array.isArray(hourlyResults) && hourlyResults.length >= 6) {
               const hourlySorted = hourlyResults
                 .sort((a: any, b: any) => (a.hour ?? 0) - (b.hour ?? 0));
 
               const dailyData = hourlySorted.map((record: any) => ({
                 hour: `${String(record.hour ?? 0).padStart(2, '0')}:00`,
                 bikes: Number(record.bikes_available_avg || 0),
-                docks: Number(record.docks_available_avg || 0),
+                docks: (stationCapacity ? Math.max(0, stationCapacity - Math.round(Number(record.bikes_available_avg || 0))) : Number(record.docks_available_avg || 0)),
                 flux: Number(record.hourly_delta || 0),
                 cv: dailyCv,
               }));
 
               setDailyBehaviorData(dailyData);
             } else {
-              // ensure UI always has 24-hour data for charts
-              setDailyBehaviorData(getDefaultHourlyData());
+              // Fewer than 6 real points → use full 24h deterministic example
+              setDailyBehaviorData(getDefaultHourlyData(stationCapacity));
             }
 
             if (Array.isArray(dailyResults) && dailyResults.length > 0) {
@@ -341,10 +400,15 @@ export function StationBehavior() {
                 const avgEntropy = dayRecords.reduce((sum: number, r: any) => sum + parseFloat(r.shannon_entropy || 0), 0) / dayRecords.length;
                 const maxUtil = Math.max(...dayRecords.map(r => parseFloat(r.average_utilization || 0)));
 
+                const avgBikes = Math.round((avgUtil / 100) * stationCapacity);
+                const peakBikes = Math.round((maxUtil / 100) * stationCapacity);
+                const avgDocks = stationCapacity ? Math.max(0, stationCapacity - avgBikes) : 0;
+
                 return {
                   day,
-                  avgBikes: Math.round((avgUtil / 100) * stationCapacity),
-                  peakBikes: Math.round((maxUtil / 100) * stationCapacity),
+                  avgBikes,
+                  peakBikes,
+                  avgDocks,
                   avgFlux: Math.round(avgFlux * 100) / 100,
                   avgCV: Math.round(avgEntropy * 100) / 100,
                 };
@@ -352,7 +416,8 @@ export function StationBehavior() {
 
               setWeeklyPattern(weeklyData);
             } else {
-              setWeeklyPattern([]);
+              // Fallback to deterministic weekly example adjusted to capacity
+              setWeeklyPattern(getDefaultWeeklyData(stationCapacity));
             }
 
             console.log('📆 Fetching weekly analytics for station ID:', station.id);
@@ -366,14 +431,22 @@ export function StationBehavior() {
 
               const monthlyData = sortedWeekly.slice(-5).map((record: any, idx: number) => ({
                 date: `Sem ${idx + 1}`,
-                bikes: Math.round((parseFloat(record.average_utilization || 0) / 100) * stationCapacity),
+                bikes: ((): number => {
+                  const b = Math.round((parseFloat(record.average_utilization || 0) / 100) * stationCapacity);
+                  return Math.min(stationCapacity || 9999, Math.max(0, b));
+                })(),
+                docks: ((): number => {
+                  const b = Math.round((parseFloat(record.average_utilization || 0) / 100) * stationCapacity);
+                  return stationCapacity ? Math.max(0, stationCapacity - b) : 0;
+                })(),
                 flux: Math.round(parseFloat(record.net_flux || 0) * 100) / 100,
                 cv: Math.round(parseFloat(record.shannon_entropy || 0) * 100) / 100,
               }));
 
               setMonthlyTrend(monthlyData);
             } else {
-              setMonthlyTrend([]);
+              // Fallback to deterministic monthly example adjusted to capacity
+              setMonthlyTrend(getDefaultMonthlyData(stationCapacity));
             }
           } catch (analyticsErr) {
             console.error('❌ Error fetching analytics:', analyticsErr);
@@ -728,7 +801,7 @@ export function StationBehavior() {
             </div>
           )}
 
-          <p className="text-sm text-gray-600 mb-5">Flux moyen et CV par jour de la semaine</p>
+          <p className="text-sm text-gray-600 mb-5">Disponibilités moyennes (vélos & emplacements) par jour de la semaine</p>
           <div className="relative">
             <ResponsiveContainer width="100%" height={320}>
             <BarChart data={weeklyPattern} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
@@ -737,19 +810,22 @@ export function StationBehavior() {
                   <stop offset="0%" stopColor="#ef4444" stopOpacity={0.8}/>
                   <stop offset="100%" stopColor="#ef4444" stopOpacity={0.3}/>
                 </linearGradient>
-                <linearGradient id="weekCV" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#8b5cf6" stopOpacity={0.8}/>
-                  <stop offset="100%" stopColor="#8b5cf6" stopOpacity={0.3}/>
+                <linearGradient id="weekBikes" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#10b981" stopOpacity={0.8}/>
+                  <stop offset="100%" stopColor="#10b981" stopOpacity={0.3}/>
+                </linearGradient>
+                <linearGradient id="weekDocks" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#f59e0b" stopOpacity={0.8}/>
+                  <stop offset="100%" stopColor="#f59e0b" stopOpacity={0.3}/>
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
               <XAxis dataKey="day" stroke="#6b7280" />
-              <YAxis yAxisId="left" stroke="#6b7280" label={{ value: 'Flux Moyen', angle: -90, position: 'insideLeft' }} />
-              <YAxis yAxisId="right" orientation="right" stroke="#6b7280" label={{ value: 'CV Moyen (%)', angle: 90, position: 'insideRight' }} />
+              <YAxis stroke="#6b7280" label={{ value: 'Vélos / Emplacements', angle: -90, position: 'insideLeft' }} />
               <Tooltip contentStyle={{ backgroundColor: '#1f2937', border: 'none', borderRadius: '8px', color: '#fff' }} />
               <Legend wrapperStyle={{ paddingTop: '20px' }} />
-              <Bar yAxisId="left" dataKey="avgFlux" fill="url(#weekFlux)" name="Flux de Transit Moyen" />
-              <Line yAxisId="right" type="monotone" dataKey="avgCV" stroke="#8b5cf6" strokeWidth={2} name="CV Moyen (%)" dot={{ fill: '#8b5cf6', r: 5 }} />
+              <Bar dataKey="avgBikes" fill="url(#weekBikes)" name="Vélos (moyenne)" />
+              <Bar dataKey="avgDocks" fill="url(#weekDocks)" name="Emplacements (moyenne)" />
             </BarChart>
           </ResponsiveContainer>
           </div>
@@ -812,7 +888,7 @@ export function StationBehavior() {
             </div>
           )}
 
-          <p className="text-sm text-gray-600 mb-5">Évolution du flux de transit et du CV</p>
+          <p className="text-sm text-gray-600 mb-5">Disponibilités et tendance mensuelle (vélos & emplacements)</p>
           <div className="relative">
             <ResponsiveContainer width="100%" height={320}>
             <LineChart data={monthlyTrend} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
@@ -828,12 +904,11 @@ export function StationBehavior() {
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
               <XAxis dataKey="date" stroke="#6b7280" />
-              <YAxis yAxisId="left" stroke="#6b7280" label={{ value: 'Flux (vélos/jour)', angle: -90, position: 'insideLeft' }} />
-              <YAxis yAxisId="right" orientation="right" stroke="#6b7280" label={{ value: 'CV (%)', angle: 90, position: 'insideRight' }} />
+              <YAxis stroke="#6b7280" label={{ value: 'Vélos / Emplacements', angle: -90, position: 'insideLeft' }} />
               <Tooltip contentStyle={{ backgroundColor: '#1f2937', border: 'none', borderRadius: '8px', color: '#fff' }} />
               <Legend wrapperStyle={{ paddingTop: '20px' }} />
-              <Line yAxisId="left" type="monotone" dataKey="flux" stroke="#ef4444" strokeWidth={3} name="Flux de Transit Total" dot={{ fill: '#ef4444', r: 5 }} />
-              <Line yAxisId="right" type="monotone" dataKey="cv" stroke="#8b5cf6" strokeWidth={3} name="CV Moyen (%)" dot={{ fill: '#8b5cf6', r: 5 }} strokeDasharray="5 5" />
+              <Line type="monotone" dataKey="bikes" stroke="#3b82f6" strokeWidth={3} name="Vélos (moyenne)" dot={{ fill: '#3b82f6', r: 5 }} />
+              <Line type="monotone" dataKey="docks" stroke="#f59e0b" strokeWidth={3} name="Emplacements (moyenne)" dot={{ fill: '#f59e0b', r: 5 }} />
             </LineChart>
           </ResponsiveContainer>
           </div>

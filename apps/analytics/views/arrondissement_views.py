@@ -27,6 +27,8 @@ class CommuneViewSet(viewsets.ModelViewSet):
         GET /api/communes/{id}/analytics/
         """
         commune = self.get_object()
-        data = CommuneService.get_commune_analytics(commune)
+        # Optional query param `hours` to request hourly timeseries (e.g. ?hours=24)
+        hours = request.query_params.get('hours', None)
+        data = CommuneService.get_commune_analytics(commune, hours=hours)
         serializer = CommuneAnalyticsSerializer(data)
         return Response(serializer.data)

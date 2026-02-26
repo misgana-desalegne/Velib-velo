@@ -24,6 +24,11 @@ export function ArrondissementAnalysis() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedCommune, setSelectedCommune] = useState('all');
+  const [hourlySeries, setHourlySeries] = useState<any[]>([]);
+  const [hourlyLoading, setHourlyLoading] = useState(false);
+  const [hourlyError, setHourlyError] = useState<string | null>(null);
+  const [weeklySeries, setWeeklySeries] = useState<any[]>([]);
+  const [monthlySeries, setMonthlySeries] = useState<any[]>([]);
   const [openExplanation, setOpenExplanation] = useState<string | null>(null);
   const [explanationText, setExplanationText] = useState('');
   const [explanationLoading, setExplanationLoading] = useState(false);
@@ -76,6 +81,94 @@ export function ArrondissementAnalysis() {
 
     fetchCommuneData();
   }, []);
+
+  // Fetch hourly series when a commune is selected
+  useEffect(() => {
+    const fetchHourly = async (code: string) => {
+      if (!code || code === 'all') return;
+      setHourlyLoading(true);
+      setHourlyError(null);
+      try {
+        const resp = await api.get(API_ENDPOINTS.arrondissementAnalytics(code) + '?hours=24');
+        const hourly = Array.isArray(resp.hourly) ? resp.hourly : [];
+
+        const points = hourly.map((h: any) => ({
+          timestamp: h.timestamp || h.date || h.hour || '',
+          bikes: Number(h.bikes_available_avg ?? h.bikes_available ?? h.bikes ?? 0),
+          docks: Number(h.docks_available_avg ?? h.docks_available ?? h.docks ?? 0),
+        }));
+
+        const totals = points.map(p => p.bikes + p.docks).filter(Boolean);
+        const median = (() => {
+          if (!totals.length) return 0;
+          const sorted = totals.slice().sort((a, b) => a - b);
+          const mid = Math.floor(sorted.length / 2);
+          return sorted.length % 2 === 0 ? Math.round((sorted[mid - 1] + sorted[mid]) / 2) : Math.round(sorted[mid]);
+        })();
+
+        const normalized = points.map(p => ({
+          timestamp: p.timestamp,
+          bikes: Math.round(p.bikes),
+          docks: Math.max(0, median ? median - Math.round(p.bikes) : Math.round(p.docks)),
+        }));
+
+        setHourlySeries(normalized);
+      } catch (err) {
+        setHourlyError(err instanceof Error ? err.message : 'Failed to load hourly series');
+        setHourlySeries([]);
+      } finally {
+        setHourlyLoading(false);
+      }
+    };
+
+    fetchHourly(selectedCommune as string);
+  }, [selectedCommune]);
+
+  // Build example weekly and monthly series (deterministic) when selection or hourlySeries changes
+  useEffect(() => {
+    if (!selectedCommune || selectedCommune === 'all') {
+      setWeeklySeries([]);
+      setMonthlySeries([]);
+      return;
+    }
+
+    // Find commune object to infer total docks
+    const communeObj = communes.find(c => c.code === selectedCommune);
+    const fallbackTotal = communeObj ? (communeObj.bikes + communeObj.docks) : 100;
+
+    const inferTotal = (() => {
+      if (hourlySeries && hourlySeries.length) {
+        const totals = hourlySeries.map(p => (p.bikes || 0) + (p.docks || 0)).filter(Boolean);
+        if (totals.length) {
+          const sorted = totals.slice().sort((a, b) => a - b);
+          const mid = Math.floor(sorted.length / 2);
+          return sorted.length % 2 === 0 ? Math.round((sorted[mid - 1] + sorted[mid]) / 2) : Math.round(sorted[mid]);
+        }
+      }
+      return fallbackTotal || 100;
+    })();
+
+    // Weekly motif: deterministic pattern (Lun..Dim)
+    const days = ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'];
+    const pattern = [0.35, 0.45, 0.5, 0.55, 0.6, 0.75, 0.5];
+    const weekly = days.map((d, i) => {
+      const bikes = Math.max(0, Math.round(inferTotal * pattern[i]));
+      return { day: d, bikes, docks: Math.max(0, inferTotal - bikes) };
+    });
+
+    // Monthly trend: 30-day smooth wave (deterministic)
+    const monthly = Array.from({ length: 30 }).map((_, i) => {
+      // base between 0.4 and 0.7 plus a small weekly modulation
+      const base = 0.55 + 0.12 * Math.sin((i / 30) * Math.PI * 2) + 0.05 * Math.sin((i / 7) * Math.PI);
+      const bikes = Math.max(0, Math.round(inferTotal * Math.min(0.95, Math.max(0.1, base))));
+      const date = new Date();
+      date.setDate(date.getDate() - (29 - i));
+      return { date: date.toISOString(), bikes, docks: Math.max(0, inferTotal - bikes) };
+    });
+
+    setWeeklySeries(weekly);
+    setMonthlySeries(monthly);
+  }, [selectedCommune, hourlySeries, communes]);
 
   const topCommunes = useMemo(() => {
     return communes.slice(0, 5);
@@ -414,6 +507,97 @@ export function ArrondissementAnalysis() {
             </ResponsiveContainer>
           </Card>
         )}
+      
+        {/* Weekly + Monthly example charts */}
+        {selectedCommune !== 'all' && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8 lg:col-span-2">
+            <Card className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">Motif Hebdomadaire</h3>
+                <p className="text-sm text-gray-600">Exemple: moyenne par jour (24h)</p>
+              </div>
+              {weeklySeries.length === 0 ? (
+                <div className="text-gray-600">No weekly data available.</div>
+              ) : (
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart data={weeklySeries} margin={{ top: 10, right: 10, left: 0, bottom: 20 }}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="day" />
+                    <YAxis />
+                    <Tooltip />
+                    <Bar dataKey="bikes" fill="#10b981" name="Bikes (avg)" />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </Card>
+
+            <Card className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">Tendance Mensuelle</h3>
+                <p className="text-sm text-gray-600">Exemple: dernier mois (30 jours)</p>
+              </div>
+              {monthlySeries.length === 0 ? (
+                <div className="text-gray-600">No monthly data available.</div>
+              ) : (
+                <ResponsiveContainer width="100%" height={220}>
+                  <LineChart data={monthlySeries} margin={{ top: 10, right: 10, left: 0, bottom: 20 }}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="date" tickFormatter={(t) => new Date(t).toLocaleDateString()} />
+                    <YAxis />
+                    <Tooltip />
+                    <Line type="monotone" dataKey="bikes" stroke="#3b82f6" strokeWidth={2} name="Bikes" />
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
+            </Card>
+          </div>
+        )}
+
+        {/* Hourly timeseries for selected commune */}
+        {selectedCommune !== 'all' && (
+          <Card className="p-6 lg:col-span-2 relative overflow-hidden">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-semibold text-gray-900">24h Hourly Trend (Bikes & Docks)</h3>
+              <p className="text-sm text-gray-600">Available bikes + docks are inferred to be constant</p>
+            </div>
+
+            {hourlyLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader className="w-8 h-8 text-purple-600 animate-spin mr-2" />
+                <span>Loading hourly series...</span>
+              </div>
+            ) : hourlyError ? (
+              <div className="text-red-600">{hourlyError}</div>
+            ) : hourlySeries.length === 0 ? (
+              <div className="text-gray-600">No hourly data available for this commune.</div>
+            ) : (
+              <ResponsiveContainer width="100%" height={300}>
+                <LineChart data={hourlySeries} margin={{ top: 20, right: 30, left: 0, bottom: 60 }}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="timestamp" tickFormatter={(t) => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} />
+                  <YAxis />
+                  <Tooltip content={({ active, payload }) => {
+                    if (active && payload && payload[0]) {
+                      const d = payload[0].payload as any;
+                      return (
+                        <div className="bg-white p-3 border border-gray-200 rounded shadow-lg">
+                          <p className="font-semibold text-gray-900">{new Date(d.timestamp).toLocaleString()}</p>
+                          <p className="text-sm text-gray-600">Bikes: {d.bikes}</p>
+                          <p className="text-sm text-gray-600">Docks: {d.docks}</p>
+                        </div>
+                      );
+                    }
+                    return null;
+                  }} />
+                  <Legend />
+                  <Line type="monotone" dataKey="bikes" stroke="#10b981" strokeWidth={2} name="Bikes" />
+                  <Line type="monotone" dataKey="docks" stroke="#f59e0b" strokeWidth={2} name="Docks" />
+                </LineChart>
+              </ResponsiveContainer>
+            )}
+          </Card>
+        )}
+
       </div>
 
       {/* Summary Metrics */}

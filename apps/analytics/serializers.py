@@ -89,6 +89,8 @@ class CommuneAnalyticsSerializer(serializers.Serializer):
     utilization = serializers.FloatField()
     cv = serializers.FloatField()
     population = serializers.IntegerField()
+    # Optional hourly timeseries for last N hours (each item follows HourlyAnalyticsSerializer)
+    hourly = HourlyAnalyticsSerializer(many=True, required=False)
 
 
 class LiveDashboardSerializer(serializers.Serializer):
